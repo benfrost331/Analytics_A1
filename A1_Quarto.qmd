@@ -11,8 +11,19 @@ editor: visual
 listings <- read.csv("listings.csv")
 ```
 
-Hello
+```{r}
+hist(listings$price, breaks = 50)
+boxplot(log(listings$price))
+```
 
-1
+```{r}
+hist(listings$availability_365, breaks = 50)
+boxplot(listings$availability_365)
+```
 
-2
+```{r}
+hist(listings$host_listings_count, breaks = 50)
+boxplot(listings$host_listings_count)
+```
+
+
