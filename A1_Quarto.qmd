@@ -1,0 +1,13 @@
+---
+title: "Analytics - Assignment 1"
+subtitle: "**Cape Town Airbnb Listing Analysis**"
+authors: "Ben Mitchell & Ben Frost"
+format: html
+editor: visual
+---
+
+```{r, echo = FALSE}
+# Loading Data Set:
+listings <- read.csv("listings.csv")
+```
+
