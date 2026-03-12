@@ -1,0 +1,177 @@
+---
+title: "ModelCreationTemplates"
+format: html
+editor: visual
+---
+
+HighHost Binary Variable Creation:
+```{r}
+# Example only: replace 0.80 with your chosen percentile
+cutoff <- quantile(trainData$host_listings_count, probs = 0.80, na.rm = TRUE)
+
+trainData$HighHost <- ifelse(trainData$host_listings_count > cutoff, "Yes", "No")
+trainData$HighHost <- factor(trainData$HighHost, levels = c("No", "Yes"))
+```
+
+Required Packages:
+```{r}
+library(glmnetUtils)
+library(randomForest)
+library(gbm)
+library(caret)
+```
+
+Pre Model Fitting Checks:
+```{r}
+if (!exists("trainData")) {
+  stop("trainData does not exist. Please create your training set first.")
+}
+
+if (!"HighHost" %in% names(trainData)) {
+  stop("trainData must contain a binary response variable named 'HighHost'.")
+}
+
+# HighHost should be a 2-level factor for most of the models below
+# Recommended coding:
+# trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+
+if (!is.factor(trainData$HighHost)) {
+  stop("trainData$HighHost should be a factor with two levels, e.g. c('No', 'Yes').")
+}
+
+if (length(levels(trainData$HighHost)) != 2) {
+  stop("trainData$HighHost must have exactly 2 levels.")
+}
+```
+
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
+```{r}
+elasticNetFile <- "elasticNetModel.RData"
+
+if (file.exists(elasticNetFile)) {
+  load(elasticNetFile)
+} else {
+  set.seed(4026)
+
+  elasticNetModel <- cv.glmnet(
+    HighHost ~ .,
+    data = trainData,
+    family = "binomial",
+    alpha = 0.5,       # template value; later you may tune this
+    nfolds = 5
+  )
+
+  save(elasticNetModel, file = elasticNetFile)
+}
+
+# To inspect:
+# print(elasticNetModel)
+# coef(elasticNetModel, s = "lambda.min")
+# plot(elasticNetModel)
+```
+
+RANDOM FOREST:
+```{r}
+if (file.exists(randomForestFile)) {
+  load(randomForestFile)
+} else {
+  set.seed(4026)
+
+  randomForestModel <- randomForest(
+    HighHost ~ .,
+    data = trainData,
+    ntree = 500,
+    mtry = floor(sqrt(ncol(trainData) - 1)),
+    importance = TRUE
+  )
+
+  save(randomForestModel, file = randomForestFile)
+}
+
+# To inspect:
+# print(randomForestModel)
+# importance(randomForestModel)
+# varImpPlot(randomForestModel)
+```
+
+BOOSTED TREE MODEL:
+```{r}
+if (file.exists(gbmFile)) {
+  load(gbmFile)
+} else {
+  set.seed(4026)
+
+  # gbm works best with a numeric 0/1 response for Bernoulli
+  gbmTrainData <- trainData
+  gbmTrainData$HighHostNum <- ifelse(gbmTrainData$HighHost == levels(gbmTrainData$HighHost)[2], 1, 0)
+
+  gbmModel <- gbm(
+    formula = HighHostNum ~ . - HighHost,
+    data = gbmTrainData,
+    distribution = "bernoulli",
+    n.trees = 1000,
+    interaction.depth = 3,
+    shrinkage = 0.01,
+    n.minobsinnode = 10,
+    cv.folds = 5,
+    verbose = FALSE
+  )
+
+  save(gbmModel, file = gbmFile)
+}
+
+# To inspect:
+# print(gbmModel)
+# bestTrees <- gbm.perf(gbmModel, method = "cv")
+# summary(gbmModel, n.trees = bestTrees)
+```
+
+K-NEAREST NEIGHBOURS:
+```{r}
+knnFile <- "knnModel.RData"
+
+if (file.exists(knnFile)) {
+  load(knnFile)
+} else {
+  set.seed(4026)
+
+  # caret requires syntactically valid factor levels for class probabilities
+  # Recommended levels: "No" and "Yes"
+  if (!all(levels(trainData$HighHost) %in% c("No", "Yes"))) {
+    stop("For caret KNN, code HighHost as factor levels c('No', 'Yes').")
+  }
+
+  knnControl <- trainControl(
+    method = "cv",
+    number = 5,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  )
+knnGrid <- expand.grid(k = seq(3, 25, by = 2))
+
+  knnModel <- train(
+    HighHost ~ .,
+    data = trainData,
+    method = "knn",
+    trControl = knnControl,
+    tuneGrid = knnGrid,
+    metric = "ROC",
+    preProcess = c("center", "scale")
+  )
+
+  save(knnModel, file = knnFile)
+}
+
+# To inspect:
+# print(knnModel)
+# plot(knnModel)
+```
+
+LOADING SAVED MODELS LATER:
+```{r}
+# load("elasticNetModel.RData")
+# load("randomForestModel.RData")
+# load("gbmModel.RData")
+# load("knnModel.RData")
+```
+
