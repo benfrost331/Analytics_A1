@@ -51,7 +51,7 @@ elasticNetFile <- "elasticNetModel.RData"
 if (file.exists(elasticNetFile)) {
   load(elasticNetFile)
 } else {
-  set.seed(4026)
+  set.seed(2026)
 
   elasticNetModel <- cv.glmnet(
     HighHost ~ .,
@@ -75,7 +75,7 @@ RANDOM FOREST:
 if (file.exists(randomForestFile)) {
   load(randomForestFile)
 } else {
-  set.seed(4026)
+  set.seed(2026)
 
   randomForestModel <- randomForest(
     HighHost ~ .,
@@ -99,7 +99,7 @@ BOOSTED TREE MODEL:
 if (file.exists(gbmFile)) {
   load(gbmFile)
 } else {
-  set.seed(4026)
+  set.seed(2026)
 
   # gbm works best with a numeric 0/1 response for Bernoulli
   gbmTrainData <- trainData
@@ -133,7 +133,7 @@ knnFile <- "knnModel.RData"
 if (file.exists(knnFile)) {
   load(knnFile)
 } else {
-  set.seed(4026)
+  set.seed(2026)
 
   # caret requires syntactically valid factor levels for class probabilities
   # Recommended levels: "No" and "Yes"
