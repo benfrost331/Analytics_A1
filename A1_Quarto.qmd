@@ -10,7 +10,6 @@ editor: visual
 library(tidyverse)
 ```
 
-
 ```{r, echo = FALSE}
 # Loading Data Set:
 listings <- read.csv("listings.csv")
@@ -33,9 +32,9 @@ boxplot(listings$host_listings_count)
 
 ## Introduction:
 
-The following report presents a supervised learning analysis of Airbnb listing data for Cape Town, with the aim of predicting a [binary outcome] linked to its potential housing-market impact. Using a curated 2025 dataset of listings, the analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with [the chosen target outcome].
+The following report presents a supervised learning analysis of Airbnb listing data for Cape Town, with the aim of predicting a \[binary outcome\] linked to its potential housing-market impact. Using a curated 2025 dataset of listings, the analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with \[the chosen target outcome\].
 
-The study follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and final evaluation remain separate. [A binary target variable] is then defined from one of the provided housing-impact proxies, with the cutoff chosen using only the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using cross-validation and a common set of evaluation metrics.
+The study follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and final evaluation remain separate. \[A binary target variable\] is then defined from one of the provided housing-impact proxies, with the cutoff chosen using only the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using cross-validation and a common set of evaluation metrics.
 
 Beyond model comparison, this report also considers decision-threshold optimisation, since the best probability threshold for classification may differ from the default value when the objective is to improve the F1 score. The selected final model is then interpreted using variable-importance and effect plots, and its prediction errors are examined through false-positive and false-negative cases. Overall, the report aims not only to assess predictive performance, but also to demonstrate a careful and interpretable modelling process.
 
@@ -50,3 +49,32 @@ trainData <- listings |> dplyr::slice(trainIndex)
 testData  <- listings |> dplyr::slice(-trainIndex)
 ```
 
+## Question 1:
+
+This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
+
+There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
+
+```{r echo = FALSE}
+#library(dplyr)
+#host_unique <- trainData |> 
+#  distinct(host_id, host_listings_count)
+#mean(host_unique$host_listings_count>2)
+
+
+```
+
+$$
+\text{HighHost} =
+\begin{cases}
+1 & \text{if } \text{host_listings_count} > 2. \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our test data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.
+
+```{r}
+trainData$host_listings_count <- ifelse(trainData$host_listings_count > 2, 1, 0)
+
+```
