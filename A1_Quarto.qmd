@@ -6,6 +6,11 @@ format: html
 editor: visual
 ---
 
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(tidyverse)
+```
+
+
 ```{r, echo = FALSE}
 # Loading Data Set:
 listings <- read.csv("listings.csv")
@@ -26,4 +31,22 @@ hist(listings$host_listings_count, breaks = 50)
 boxplot(listings$host_listings_count)
 ```
 
+## Introduction:
+
+The following report presents a supervised learning analysis of Airbnb listing data for Cape Town, with the aim of predicting a <binary outcome> linked to its potential housing-market impact. Using a curated 2025 dataset of listings, the analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with <the chosen target outcome>.
+
+The study follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and final evaluation remain separate. <A binary target variable> is then defined from one of the provided housing-impact proxies, with the cutoff chosen using only the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using cross-validation and a common set of evaluation metrics.
+
+Beyond model comparison, this report also considers decision-threshold optimisation, since the best probability threshold for classification may differ from the default value when the objective is to improve the F1 score. The selected final model is then interpreted using variable-importance and effect plots, and its prediction errors are examined through false-positive and false-negative cases. Overall, the report aims not only to assess predictive performance, but also to demonstrate a careful and interpretable modelling process.
+
+```{r echo = FALSE}
+# Training & Test Set Split
+set.seed(2026)
+
+n <- nrow(listings)
+trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
+
+trainData <- listings |> dplyr::slice(trainIndex)
+testData  <- listings |> dplyr::slice(-trainIndex)
+```
 
