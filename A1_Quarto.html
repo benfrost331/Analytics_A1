@@ -68,6 +68,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <link href="A1_Quarto_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="A1_Quarto_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
 
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
 
 </head>
 
@@ -102,31 +104,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(listings<span class="sc">$</span>price, <span class="at">breaks =</span> <span class="dv">50</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="672"></p>
 </div>
-<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">boxplot</span>(<span class="fu">log</span>(listings<span class="sc">$</span>price))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-3-2.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(listings<span class="sc">$</span>availability_365, <span class="at">breaks =</span> <span class="dv">50</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
 </div>
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">boxplot</span>(listings<span class="sc">$</span>availability_365)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-4-2.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">hist</span>(listings<span class="sc">$</span>host_listings_count, <span class="at">breaks =</span> <span class="dv">50</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid" width="672"></p>
 </div>
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">boxplot</span>(listings<span class="sc">$</span>host_listings_count)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-5-2.png" class="img-fluid" width="672"></p>
 </div>
@@ -136,6 +132,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>The following report presents a supervised learning analysis of Airbnb listing data for Cape Town, with the aim of predicting a [binary outcome] linked to its potential housing-market impact. Using a curated 2025 dataset of listings, the analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with [the chosen target outcome].</p>
 <p>The study follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and final evaluation remain separate. [A binary target variable] is then defined from one of the provided housing-impact proxies, with the cutoff chosen using only the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using cross-validation and a common set of evaluation metrics.</p>
 <p>Beyond model comparison, this report also considers decision-threshold optimisation, since the best probability threshold for classification may differ from the default value when the objective is to improve the F1 score. The selected final model is then interpreted using variable-importance and effect plots, and its prediction errors are examined through false-positive and false-negative cases. Overall, the report aims not only to assess predictive performance, but also to demonstrate a careful and interpretable modelling process.</p>
+</section>
+<section id="question-1" class="level2">
+<h2 class="anchored" data-anchor-id="question-1">Question 1:</h2>
+<p>This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.</p>
+<p>There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.</p>
+<p><span class="math display">\[
+\text{HighHost} =
+\begin{cases}
+1 &amp; \text{if } \text{host_listings_count} &gt; 2. \\
+0 &amp; \text{otherwise}
+\end{cases}
+\]</span></p>
+<p>We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our test data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>trainData<span class="sc">$</span>host_listings_count <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(trainData<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 </section>
 
 </main>

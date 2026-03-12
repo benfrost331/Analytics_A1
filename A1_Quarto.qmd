@@ -15,17 +15,20 @@ library(tidyverse)
 listings <- read.csv("listings.csv")
 ```
 
-```{r}
+```{r, echo = FALSE}
+# Price Distribution Exploration
 hist(listings$price, breaks = 50)
 boxplot(log(listings$price))
 ```
 
-```{r}
+```{r, echo = FALSE}
+# Availability Distribution Exploration
 hist(listings$availability_365, breaks = 50)
 boxplot(listings$availability_365)
 ```
 
-```{r}
+```{r, echo = FALSE}
+# Host Listings Count Distribution Exploration
 hist(listings$host_listings_count, breaks = 50)
 boxplot(listings$host_listings_count)
 ```
@@ -60,8 +63,6 @@ There have been concerns in Cape Town regarding the massive influx of Airbnb sho
 #host_unique <- trainData |> 
 #  distinct(host_id, host_listings_count)
 #mean(host_unique$host_listings_count>2)
-
-
 ```
 
 $$
@@ -76,5 +77,4 @@ We have chosen to use 2 to be the threshold value used to define the binary targ
 
 ```{r}
 trainData$host_listings_count <- ifelse(trainData$host_listings_count > 2, 1, 0)
-
 ```
