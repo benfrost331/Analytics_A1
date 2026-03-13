@@ -1,0 +1,158 @@
+---
+title: "BM"
+format: html
+editor: visual
+---
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+# Required Package Installation:
+library(tidyverse)
+library(dplyr)
+library(glmnet)
+library(randomForest)
+library(gbm)
+library(caret)
+```
+
+```{r, echo = FALSE}
+# Loading Data Set:
+listings <- read.csv("listings.csv")
+```
+
+## Introduction:
+
+The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. The analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. \[Maybe Discuss Potential Impact/Implications Here?\] Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
+
+Our analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then defined with the property number threshold being determined using the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
+
+Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.
+
+```{r echo = FALSE}
+# Training & Test Set Split (Raw Data)
+set.seed(2026)
+
+n <- nrow(listings)
+trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
+
+trainData <- listings |> dplyr::slice(trainIndex)
+testData  <- listings |> dplyr::slice(-trainIndex)
+```
+
+## Question 1:
+
+This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
+
+There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
+
+```{r echo = FALSE}
+hostUnique <- trainData |> 
+  distinct(host_id, host_listings_count)
+
+HHtrain <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
+nHHtrain <- 100 - round(mean(hostUnique$host_listings_count > 2) * 100,2)
+```
+
+**Class Imbalance for x = 2 on Training Data:** <br> HighHost: `r HHtrain`% <br> Not HighHost: `r nHHtrain`% <br>
+
+```{r echo = FALSE}
+hostUnique <- testData |> 
+  distinct(host_id, host_listings_count)
+
+HHtest <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
+nHHtest <- 100 - round(mean(hostUnique$host_listings_count > 2) * 100,2)
+```
+
+**Class Imbalance for x = 2 on Test Data:** <br>HighHost: `r HHtest`% <br>Not HighHost: `r nHHtest`%
+
+$$
+\text{HighHost} =
+\begin{cases}
+1 & \text{if } \text{host_listings_count} > 2. \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
+We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our training data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.
+
+```{r echo = FALSE}
+hostCutoff = 2
+
+# Binary Response: 1 = Yes, 0 = No
+listings$host_listings_count <- ifelse(listings$host_listings_count > 2, 1, 0)
+
+listings <- listings |>
+  rename(HighHost = host_listings_count)
+```
+
+```{r echo = FALSE}
+# Training & Test Set Split With HighHost
+set.seed(2026)
+
+n <- nrow(listings)
+trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
+
+trainData <- listings |> dplyr::slice(trainIndex)
+testData  <- listings |> dplyr::slice(-trainIndex)
+```
+
+DATA PRE-PROCESSING:
+
+```{r echo = FALSE}
+# Remove id (Useless) & host_id (Target Leakage Prevention):
+
+  trainData <- trainData |>
+    select(-id, -host_id)
+  
+  testData <- testData |>
+    select(-id, -host_id)
+
+# Convert host_since to a Usable Numeric Predictor:
+
+  # Convert host_since to Date:
+  trainData$host_since <- as.Date(trainData$host_since, format = "%Y/%m/%d")
+  testData$host_since  <- as.Date(testData$host_since, format = "%Y/%m/%d")
+  
+  # Use Training Data to Define the Reference Date:
+  minHostSince <- min(trainData$host_since)
+  
+  # Create Numeric Variable host_since_days:
+  trainData$host_since_days <- as.numeric(trainData$host_since - minHostSince)
+  testData$host_since_days  <- as.numeric(testData$host_since - minHostSince)
+  
+  # Remove host_since:
+  trainData <- trainData |>
+    select(-host_since)
+  
+  testData <- testData |>
+    select(-host_since)
+```
+
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
+
+```{r, eval = FALSE}
+elasticNetFile <- "elasticNetModel.RData"
+
+if (file.exists(elasticNetFile))
+{
+  load(elasticNetFile)
+} 
+else 
+{
+  set.seed(2026)
+
+  elasticNetModel <- cv.glmnet(
+    HighHost ~ .,
+    data = trainData,
+    family = "binomial",
+    alpha = 0.5,       # Tune Later
+    nfolds = 5         # 10?
+  )
+
+  save(elasticNetModel, file = elasticNetFile)
+}
+
+# To inspect:
+# print(elasticNetModel)
+# coef(elasticNetModel, s = "lambda.min")
+# plot(elasticNetModel)
+```
