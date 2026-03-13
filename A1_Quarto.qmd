@@ -79,7 +79,6 @@ We have chosen to use 2 to be the threshold value used to define the binary targ
 ```{r echo = FALSE}
 hostCutoff = 2
 
-<<<<<<< HEAD
 # Binary Response: 1 = Yes, 0 = No
 listings$host_listings_count <- ifelse(listings$host_listings_count > 2, 1, 0)
 
@@ -158,7 +157,4 @@ else
 # print(elasticNetModel)
 # coef(elasticNetModel, s = "lambda.min")
 # plot(elasticNetModel)
-=======
-trainData
->>>>>>> 928ea28f00bd8e5ffea34e84af1132969b1ca11b
 ```
