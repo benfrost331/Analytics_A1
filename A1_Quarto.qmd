@@ -77,4 +77,5 @@ We have chosen to use 2 to be the threshold value used to define the binary targ
 ```{r}
 trainData$host_listings_count <- ifelse(trainData$host_listings_count > 2, 1, 0)
 
+trainData
 ```
