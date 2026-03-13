@@ -97,6 +97,38 @@ trainData <- listings |> dplyr::slice(trainIndex)
 testData  <- listings |> dplyr::slice(-trainIndex)
 ```
 
+DATA PRE-PROCESSING:
+
+```{r echo = FALSE}
+# Remove id (Useless) & host_id (Target Leakage Prevention):
+
+  trainData <- trainData |>
+    select(-id, -host_id)
+  
+  testData <- testData |>
+    select(-id, -host_id)
+
+# Convert host_since to a Usable Numeric Predictor:
+
+  # Convert host_since to Date:
+  trainData$host_since <- as.Date(trainData$host_since, format = "%Y/%m/%d")
+  testData$host_since  <- as.Date(testData$host_since, format = "%Y/%m/%d")
+  
+  # Use Training Data to Define the Reference Date:
+  minHostSince <- min(trainData$host_since)
+  
+  # Create Numeric Variable host_since_days:
+  trainData$host_since_days <- as.numeric(trainData$host_since - minHostSince)
+  testData$host_since_days  <- as.numeric(testData$host_since - minHostSince)
+  
+  # Remove host_since:
+  trainData <- trainData |>
+    select(-host_since)
+  
+  testData <- testData |>
+    select(-host_since)
+```
+
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
 
 ```{r, eval = FALSE}
