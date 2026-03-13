@@ -103,40 +103,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 </header>
 
-<div class="cell">
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-3-1.png" class="img-fluid" width="672"></p>
-</div>
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-3-2.png" class="img-fluid" width="672"></p>
-</div>
-</div>
-<div class="cell">
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
-</div>
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-4-2.png" class="img-fluid" width="672"></p>
-</div>
-</div>
-<div class="cell">
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid" width="672"></p>
-</div>
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-5-2.png" class="img-fluid" width="672"></p>
-</div>
-</div>
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction:</h2>
-<p>The following report presents a supervised learning analysis of Airbnb listing data for Cape Town, with the aim of predicting a [binary outcome] linked to its potential housing-market impact. Using a curated 2025 dataset of listings, the analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with [the chosen target outcome].</p>
-<p>The study follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and final evaluation remain separate. [A binary target variable] is then defined from one of the provided housing-impact proxies, with the cutoff chosen using only the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using cross-validation and a common set of evaluation metrics.</p>
-<p>Beyond model comparison, this report also considers decision-threshold optimisation, since the best probability threshold for classification may differ from the default value when the objective is to improve the F1 score. The selected final model is then interpreted using variable-importance and effect plots, and its prediction errors are examined through false-positive and false-negative cases. Overall, the report aims not only to assess predictive performance, but also to demonstrate a careful and interpretable modelling process.</p>
+<p>The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. The analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a ‘High Host’ and explore this response’s potential housing-market impact. [Maybe Discuss Potential Impact/Implications Here?] Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a ‘High Host’.</p>
+<p>Our analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a ‘High Host’ is then defined with the property number threshold being determined using the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.</p>
+<p>Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.</p>
 </section>
 <section id="question-1" class="level2">
 <h2 class="anchored" data-anchor-id="question-1">Question 1:</h2>
 <p>This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.</p>
 <p>There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.</p>
+<p><strong>Class Imbalance for x = 2 on Training Data:</strong> <br> HighHost: 27.41% <br> Not HighHost: 72.59% <br></p>
+<p><strong>Class Imbalance for x = 2 on Test Data:</strong> <br>HighHost: 40.42% <br>Not HighHost: 59.58%</p>
 <p><span class="math display">\[
 \text{HighHost} =
 \begin{cases}
@@ -145,8 +123,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 \end{cases}
 \]</span></p>
 <p>We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our test data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.</p>
+<p>REGULARISED ELASTIC-NET LOGISTIC REGRESSION:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>trainData<span class="sc">$</span>host_listings_count <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(trainData<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>elasticNetFile <span class="ot">&lt;-</span> <span class="st">"elasticNetModel.RData"</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">file.exists</span>(elasticNetFile)) {</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">load</span>(elasticNetFile)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">set.seed</span>(<span class="dv">2026</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  elasticNetModel <span class="ot">&lt;-</span> <span class="fu">cv.glmnet</span>(</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    HighHost <span class="sc">~</span> .,</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> trainData,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">family =</span> <span class="st">"binomial"</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> <span class="fl">0.5</span>,       <span class="co"># template value; later you may tune this</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">nfolds =</span> <span class="dv">5</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">save</span>(elasticNetModel, <span class="at">file =</span> elasticNetFile)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="co"># To inspect:</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># print(elasticNetModel)</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="co"># coef(elasticNetModel, s = "lambda.min")</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co"># plot(elasticNetModel)</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 

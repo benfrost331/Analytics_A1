@@ -6,16 +6,17 @@ editor: visual
 
 HighHost Binary Variable Creation:
 ```{r}
-# Example only: replace 0.80 with your chosen percentile
-cutoff <- quantile(trainData$host_listings_count, probs = 0.80, na.rm = TRUE)
+# Enforce the assignment rule that the cutoff must be at least 2
+hostCutoff <- max(as.numeric(hostCutoff), 2)
 
-trainData$HighHost <- ifelse(trainData$host_listings_count > cutoff, "Yes", "No")
-trainData$HighHost <- factor(trainData$HighHost, levels = c("No", "Yes"))
+# Create binary response: 1 = Yes, 0 = No
+trainData$HighHost <- ifelse(trainData$host_listings_count > hostCutoff, 1, 0)
+testData$HighHost  <- ifelse(testData$host_listings_count > hostCutoff, 1, 0)
 ```
 
 Required Packages:
 ```{r}
-library(glmnetUtils)
+library(glmnet)
 library(randomForest)
 library(gbm)
 library(caret)
