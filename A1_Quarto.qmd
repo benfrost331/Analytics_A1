@@ -80,7 +80,10 @@ We have chosen to use 2 to be the threshold value used to define the binary targ
 hostCutoff = 2
 
 # Binary Response: 1 = Yes, 0 = No
-listings$HighHost <- ifelse(listings$host_listings_count > 2, 1, 0)
+listings$host_listings_count <- ifelse(listings$host_listings_count > 2, 1, 0)
+
+listings <- listings |>
+  rename(HighHost = host_listings_count)
 ```
 
 ```{r echo = FALSE}
@@ -96,20 +99,23 @@ testData  <- listings |> dplyr::slice(-trainIndex)
 
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
 
-```{r eval = FALSE}
+```{r, eval = FALSE}
 elasticNetFile <- "elasticNetModel.RData"
 
-if (file.exists(elasticNetFile)) {
+if (file.exists(elasticNetFile))
+{
   load(elasticNetFile)
-} else {
+} 
+else 
+{
   set.seed(2026)
 
   elasticNetModel <- cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = 0.5,       # template value; later you may tune this
-    nfolds = 5
+    alpha = 0.5,       # Tune Later
+    nfolds = 5         # 10?
   )
 
   save(elasticNetModel, file = elasticNetFile)
