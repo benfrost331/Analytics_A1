@@ -10,7 +10,7 @@ editor: visual
 # Required Package Installation:
 library(tidyverse)
 library(dplyr)
-library(glmnet)
+library(glmnetUtils)
 library(randomForest)
 library(gbm)
 library(caret)
@@ -158,32 +158,36 @@ DATA PRE-PROCESSING:
   
   # ENSURE DONE BEFORE MODEL CREATION
 ```
- 
-REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
 
-```{r}
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION FITTING:
+
+```{r, echo = FALSE}
 elasticNetFile <- "elasticNetModel.RData"
 
-if (file.exists(elasticNetFile))
-{
-  load(elasticNetFile)
-} else 
-{
+#if (file.exists(elasticNetFile))
+#{
+#  load(elasticNetFile)
+#} else 
+#{
   set.seed(2026)
 
-  elasticNetModel <- cv.glmnet(
+  elasticNetModel <- glmnetUtils::cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = 0.5,       # Tune Later
-    nfolds = 5         # 10?
+    alpha = 0.6,       # Tune Later
+    nfolds = 10        
   )
 
   save(elasticNetModel, file = elasticNetFile)
-}
-
-# To inspect:
-# print(elasticNetModel)
-# coef(elasticNetModel, s = "lambda.min")
-# plot(elasticNetModel)
+#}
 ```
+
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
+
+```{r, echo = FALSE}
+print(elasticNetModel)
+coef(elasticNetModel, s = "lambda.min")
+plot(elasticNetModel)
+```
+
