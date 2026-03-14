@@ -5,7 +5,6 @@ authors: "Ben Mitchell & Ben Frost"
 format: html
 editor: visual
 ---
-
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
 # Required Package Installation:
 library(tidyverse)
@@ -228,13 +227,20 @@ RANDOM FOREST FITTING:
 #if (file.exists(randomForestFile)) {
 #  load(randomForestFile)
 #} else {
+  
+  trainDataRF <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
+  select(-neighbourhood_ward)
+
+  testDataRF <- testData |>       # USE LATER WHEN TESTING
+    select(-neighbourhood_ward)
+
   set.seed(2026)
 
   randomForestModel <- randomForest(
     HighHost ~ .,
-    data = trainData,
+    data = trainDataRF,
     ntree = 500,
-    mtry = ncol(trainData) - 1, #floor(sqrt(ncol(trainData) - 1))
+    mtry = floor(sqrt(ncol(trainDataRF) - 1)), #ncol(trainDataRF) - 1
     importance = TRUE
   )
 
