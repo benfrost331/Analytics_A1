@@ -296,3 +296,56 @@ print(gbmModel)
 bestTrees <- gbm.perf(gbmModel, method = "cv")
 summary(gbmModel, n.trees = bestTrees)
 ```
+
+CONVERTING HighHost TO BE A FACTOR:
+
+```{r, echo = FALSE}
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+```
+
+K-NEAREST NEIGHBOURS FITTING:
+
+```{r}
+#knnFile <- "knnModel.RData"
+
+#if (file.exists(knnFile)) {
+#  load(knnFile)
+#} else {
+  set.seed(2026)
+
+  trainDataKNN <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
+  select(-neighbourhood_ward)
+
+  testDataKNN <- testData |>       # USE LATER WHEN TESTING
+    select(-neighbourhood_ward)
+
+  knnControl <- trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  )
+knnGrid <- expand.grid(k = seq(3, 25, by = 2))
+
+  knnModel <- train(
+    HighHost ~ .,
+    data = trainDataKNN,
+    method = "knn",
+    trControl = knnControl,
+    tuneGrid = knnGrid,
+    metric = "ROC",
+    preProcess = c("center", "scale")
+  )
+
+#  save(knnModel, file = knnFile)
+#}
+```
+
+K-NEAREST NEIGHBOURS INSPECTION:
+
+```{r}
+print(knnModel)
+plot(knnModel)
+```
+
