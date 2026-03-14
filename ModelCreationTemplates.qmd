@@ -5,6 +5,7 @@ editor: visual
 ---
 
 HighHost Binary Variable Creation:
+
 ```{r}
 # Enforce the assignment rule that the cutoff must be at least 2
 hostCutoff <- max(as.numeric(hostCutoff), 2)
@@ -15,6 +16,7 @@ testData$HighHost  <- ifelse(testData$host_listings_count > hostCutoff, 1, 0)
 ```
 
 Required Packages:
+
 ```{r}
 library(glmnet)
 library(randomForest)
@@ -23,6 +25,7 @@ library(caret)
 ```
 
 Pre Model Fitting Checks:
+
 ```{r}
 if (!exists("trainData")) {
   stop("trainData does not exist. Please create your training set first.")
@@ -46,6 +49,7 @@ if (length(levels(trainData$HighHost)) != 2) {
 ```
 
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
+
 ```{r}
 elasticNetFile <- "elasticNetModel.RData"
 
@@ -72,6 +76,7 @@ if (file.exists(elasticNetFile)) {
 ```
 
 RANDOM FOREST:
+
 ```{r}
 if (file.exists(randomForestFile)) {
   load(randomForestFile)
@@ -96,6 +101,7 @@ if (file.exists(randomForestFile)) {
 ```
 
 BOOSTED TREE MODEL:
+
 ```{r}
 if (file.exists(gbmFile)) {
   load(gbmFile)
@@ -128,6 +134,7 @@ if (file.exists(gbmFile)) {
 ```
 
 K-NEAREST NEIGHBOURS:
+
 ```{r}
 knnFile <- "knnModel.RData"
 
@@ -169,10 +176,10 @@ knnGrid <- expand.grid(k = seq(3, 25, by = 2))
 ```
 
 LOADING SAVED MODELS LATER:
+
 ```{r}
 # load("elasticNetModel.RData")
 # load("randomForestModel.RData")
 # load("gbmModel.RData")
 # load("knnModel.RData")
 ```
-

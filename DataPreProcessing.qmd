@@ -1,0 +1,77 @@
+---
+title: "DataPreProcessing"
+format: html
+editor: visual
+---
+
+```{r echo = FALSE}
+# Training & Test Set Split With HighHost
+set.seed(2026)
+
+n <- nrow(listings)
+trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
+
+trainData <- listings |> dplyr::slice(trainIndex)
+testData  <- listings |> dplyr::slice(-trainIndex)
+```
+
+DATA PRE-PROCESSING:
+
+```{r echo = FALSE}
+# Remove id (Useless) & host_id (Target Leakage Prevention):
+
+  trainData <- trainData |>
+    select(-id, -host_id)
+  
+  testData <- testData |>
+    select(-id, -host_id)
+
+# Convert host_since to a Usable Numeric Predictor:
+
+  # Convert host_since to Date:
+  trainData$host_since <- as.Date(trainData$host_since, format = "%Y/%m/%d")
+  testData$host_since  <- as.Date(testData$host_since, format = "%Y/%m/%d")
+  
+  # Use Training Data to Define the Reference Date:
+  minHostSince <- min(trainData$host_since)
+  
+  # Create Numeric Variable host_since_days:
+  trainData$host_since_days <- as.numeric(trainData$host_since - minHostSince)
+  testData$host_since_days  <- as.numeric(testData$host_since - minHostSince)
+  
+  # Remove host_since:
+  trainData <- trainData |>
+    select(-host_since)
+  
+  testData <- testData |>
+    select(-host_since)
+  
+# Transform host_verifications into Usable Binary Features:
+  
+  # Binary Indicator Creation:
+  trainData$has_email_verification <- ifelse(grepl("email", trainData$host_verifications), 1, 0)
+  testData$has_email_verification  <- ifelse(grepl("email", testData$host_verifications), 1, 0)
+  
+  trainData$has_phone_verification <- ifelse(grepl("phone", trainData$host_verifications), 1, 0)
+  testData$has_phone_verification  <- ifelse(grepl("phone", testData$host_verifications), 1, 0)
+  
+  trainData$has_work_email_verification <- ifelse(grepl("work_email", trainData$host_verifications), 1, 0)
+  testData$has_work_email_verification  <- ifelse(grepl("work_email", testData$host_verifications), 1, 0)
+  
+  # Remove host_verifications:
+  trainData <- trainData |>
+    select(-host_verifications)
+  
+  testData <- testData |>
+    select(-host_verifications)
+  
+# HighHost Variable Classes Required for Model Types:
+  
+  # Elastic Net : Numeric
+  # Random Forest : Factor
+  # GBM : Numeric
+  # KNN : Factor
+  
+  # ENSURE DONE BEFORE MODEL CREATION
+```
+ 
