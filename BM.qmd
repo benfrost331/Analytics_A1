@@ -34,8 +34,8 @@ set.seed(2026)
 n <- nrow(listings)
 trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
 
-trainData <- listings |> dplyr::slice(trainIndex)
-testData  <- listings |> dplyr::slice(-trainIndex)
+trainDataC <- listings |> dplyr::slice(trainIndex)
+testDataC  <- listings |> dplyr::slice(-trainIndex)
 ```
 
 ## Question 1:
@@ -45,7 +45,7 @@ This project will be modelling the binary target variable fitted to the Host Lis
 There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
 
 ```{r echo = FALSE}
-hostUnique <- trainData |> 
+hostUnique <- trainDataC |> 
   distinct(host_id, host_listings_count)
 
 HHtrain <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
@@ -55,7 +55,7 @@ nHHtrain <- 100 - round(mean(hostUnique$host_listings_count > 2) * 100,2)
 **Class Imbalance for x = 2 on Training Data:** <br> HighHost: `r HHtrain`% <br> Not HighHost: `r nHHtrain`% <br>
 
 ```{r echo = FALSE}
-hostUnique <- testData |> 
+hostUnique <- testDataC |> 
   distinct(host_id, host_listings_count)
 
 HHtest <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
@@ -83,6 +83,8 @@ listings$host_listings_count <- ifelse(listings$host_listings_count > 2, 1, 0)
 listings <- listings |>
   rename(HighHost = host_listings_count)
 ```
+
+## Question 2:
 
 ```{r echo = FALSE}
 # Training & Test Set Split With HighHost
@@ -125,34 +127,112 @@ DATA PRE-PROCESSING:
   
   testData <- testData |>
     select(-host_since)
+  
+# Transform host_verifications into Usable Binary Features:
+  
+  # Binary Indicator Creation:
+  trainData$has_email_verification <- ifelse(grepl("email", trainData$host_verifications), 1, 0)
+  testData$has_email_verification  <- ifelse(grepl("email", testData$host_verifications), 1, 0)
+  
+  trainData$has_phone_verification <- ifelse(grepl("phone", trainData$host_verifications), 1, 0)
+  testData$has_phone_verification  <- ifelse(grepl("phone", testData$host_verifications), 1, 0)
+  
+  trainData$has_work_email_verification <- ifelse(grepl("work_email", trainData$host_verifications), 1, 0)
+  testData$has_work_email_verification  <- ifelse(grepl("work_email", testData$host_verifications), 1, 0)
+  
+  # Remove host_verifications:
+  trainData <- trainData |>
+    select(-host_verifications)
+  
+  testData <- testData |>
+    select(-host_verifications)
+  
+# HighHost Variable Classes Required for Model Types:
+  
+  # Elastic Net : Numeric
+  # Random Forest : Factor
+  # GBM : Numeric
+  # KNN : Factor
+  
+  # ENSURE DONE BEFORE MODEL CREATION
 ```
 
-REGULARISED ELASTIC-NET LOGISTIC REGRESSION:
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION FITTING:
 
-```{r, eval = FALSE}
+```{r, echo = FALSE}
 elasticNetFile <- "elasticNetModel.RData"
 
-if (file.exists(elasticNetFile))
-{
-  load(elasticNetFile)
-} 
-else 
-{
+#if (file.exists(elasticNetFile))
+#{
+#  load(elasticNetFile)
+#} else 
+#{
   set.seed(2026)
+alphaGrid <- seq(0,1, by = 0.1)
 
-  elasticNetModel <- cv.glmnet(
+elasticNetResults <- lapply(alphaGrid, function(a) {  
+  elasticNetModel <- glmnetUtils::cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = 0.5,       # Tune Later
-    nfolds = 5         # 10?
+    alpha = a,       # Tune Later
+    nfolds = 10,
+    type.measure = "auc"
+  )
+  index <- which.min(abs(elasticNetModel$lambda - elasticNetModel$lambda.min)) 
+  
+  data.frame(alpha = a,
+             lambda_min = elasticNetModel$lambda.min,
+             auc = elasticNetModel$cvm[index])
+})
+  elasticNetResults <- do.call(rbind, elasticNetResults)
+  best_model_EN <- elasticNetResults[which.max(elasticNetResults$auc),]
+  best_model_EN
+  save(elasticNetModel, file = elasticNetFile)
+#}
+```
+
+REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
+
+```{r, echo = FALSE}
+print(elasticNetModel)
+coef(elasticNetModel, s = "lambda.min")
+plot(elasticNetModel)
+```
+
+CONVERTING HighHost TO BE A FACTOR:
+
+```{r, echo = FALSE}
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+```
+
+RANDOM FOREST FITTING:
+
+```{r, echo = FALSE}
+#if (file.exists(randomForestFile)) {
+#  load(randomForestFile)
+#} else {
+  set.seed(2026)
+
+  randomForestModel <- randomForest(
+    HighHost ~ .,
+    data = trainData,
+    ntree = 500,
+    mtry = ncol(trainData) - 1, #floor(sqrt(ncol(trainData) - 1))
+    importance = TRUE
   )
 
-  save(elasticNetModel, file = elasticNetFile)
-}
+#  save(randomForestModel, file = randomForestFile)
+#}
+```
 
-# To inspect:
-# print(elasticNetModel)
-# coef(elasticNetModel, s = "lambda.min")
-# plot(elasticNetModel)
+RANDOM FOREST FITTING INSPECTION:
+
+```{r, echo = FALSE}
+randomForestModel
+plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
+#print(randomForestModel)
+#importance(randomForestModel)
+#varImpPlot(randomForestModel)
 ```
