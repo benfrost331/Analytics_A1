@@ -5,7 +5,6 @@ authors: "Ben Mitchell & Ben Frost"
 format: html
 editor: visual
 ---
-
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
 # Required Package Installation:
 library(tidyverse)
@@ -148,6 +147,30 @@ DATA PRE-PROCESSING:
   
   testData <- testData |>
     select(-host_verifications)
+
+# Transform Categorical Variables to be Factors:
+  
+  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THHE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
+  
+  # host_response_time:
+  trainData$host_response_time <- as.factor(trainData$host_response_time)
+  testData$host_response_time  <- factor(testData$host_response_time, levels = levels(trainData$host_response_time))
+  
+  # host_is_superhost
+  trainData$host_is_superhost <- as.factor(trainData$host_is_superhost)
+  testData$host_is_superhost  <- factor(testData$host_is_superhost, levels = levels(trainData$host_is_superhost))
+  
+  # neighbourhood_ward
+  trainData$neighbourhood_ward <- as.factor(trainData$neighbourhood_ward)
+  testData$neighbourhood_ward  <- factor(testData$neighbourhood_ward, levels = levels(trainData$neighbourhood_ward))
+  
+  # room_type
+  trainData$room_type <- as.factor(trainData$room_type)
+  testData$room_type  <- factor(testData$room_type, levels = levels(trainData$room_type))
+  
+  # instant_bookable
+  trainData$instant_bookable <- as.factor(trainData$instant_bookable)
+  testData$instant_bookable  <- factor(testData$instant_bookable, levels = levels(trainData$instant_bookable))
   
 # HighHost Variable Classes Required for Model Types:
   
@@ -204,13 +227,20 @@ RANDOM FOREST FITTING:
 #if (file.exists(randomForestFile)) {
 #  load(randomForestFile)
 #} else {
+  
+  trainDataRF <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
+  select(-neighbourhood_ward)
+
+  testDataRF <- testData |>       # USE LATER WHEN TESTING
+    select(-neighbourhood_ward)
+
   set.seed(2026)
 
   randomForestModel <- randomForest(
     HighHost ~ .,
-    data = trainData,
+    data = trainDataRF,
     ntree = 500,
-    mtry = ncol(trainData) - 1, #floor(sqrt(ncol(trainData) - 1))
+    mtry = floor(sqrt(ncol(trainDataRF) - 1)), #ncol(trainDataRF) - 1
     importance = TRUE
   )
 
@@ -227,3 +257,97 @@ plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", 
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
 ```
+
+
+CONVERTING HighHost TO BE NUMERIC:
+
+```{r}
+trainData$HighHost <- ifelse(trainData$HighHost == "Yes", 1, 0)
+testData$HighHost  <- ifelse(testData$HighHost == "Yes", 1, 0)
+```
+
+GBM BOOSTED TREE MODEL FITTING:
+
+```{r}
+#if (file.exists(gbmFile)) {
+#  load(gbmFile)
+#} else {
+  set.seed(2026)
+  
+  gbmModel <- gbm(
+    formula = HighHost ~ . - HighHost,
+    data = trainData,
+    distribution = "bernoulli",
+    n.trees = 1000,
+    interaction.depth = 3,
+    shrinkage = 0.01,
+    n.minobsinnode = 10,
+    cv.folds = 5,
+    verbose = FALSE
+  )
+
+#  save(gbmModel, file = gbmFile)
+#}
+```
+
+GBM BOOSTED TREE MODEL INSPECTION:
+
+```{r}
+print(gbmModel)
+bestTrees <- gbm.perf(gbmModel, method = "cv")
+summary(gbmModel, n.trees = bestTrees)
+```
+
+CONVERTING HighHost TO BE A FACTOR:
+
+```{r, echo = FALSE}
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+```
+
+K-NEAREST NEIGHBOURS FITTING:
+
+```{r}
+#knnFile <- "knnModel.RData"
+
+#if (file.exists(knnFile)) {
+#  load(knnFile)
+#} else {
+  set.seed(2026)
+
+  trainDataKNN <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
+  select(-neighbourhood_ward)
+
+  testDataKNN <- testData |>       # USE LATER WHEN TESTING
+    select(-neighbourhood_ward)
+
+  knnControl <- trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  )
+knnGrid <- expand.grid(k = seq(3, 25, by = 2))
+
+  knnModel <- train(
+    HighHost ~ .,
+    data = trainDataKNN,
+    method = "knn",
+    trControl = knnControl,
+    tuneGrid = knnGrid,
+    metric = "ROC",
+    preProcess = c("center", "scale")
+  )
+
+#  save(knnModel, file = knnFile)
+#}
+```
+
+K-NEAREST NEIGHBOURS INSPECTION:
+
+```{r}
+print(knnModel)
+plot(knnModel)
+```
+
+
