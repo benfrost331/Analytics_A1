@@ -191,3 +191,40 @@ coef(elasticNetModel, s = "lambda.min")
 plot(elasticNetModel)
 ```
 
+CONVERTING HighHost TO BE A FACTOR:
+
+```{r, echo = FALSE}
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+```
+
+RANDOM FOREST FITTING:
+
+```{r, echo = FALSE}
+#if (file.exists(randomForestFile)) {
+#  load(randomForestFile)
+#} else {
+  set.seed(2026)
+
+  randomForestModel <- randomForest(
+    HighHost ~ .,
+    data = trainData,
+    ntree = 500,
+    mtry = ncol(trainData) - 1, #floor(sqrt(ncol(trainData) - 1))
+    importance = TRUE
+  )
+
+#  save(randomForestModel, file = randomForestFile)
+#}
+```
+
+RANDOM FOREST FITTING INSPECTION:
+
+```{r, echo = FALSE}
+randomForestModel
+plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
+#print(randomForestModel)
+#importance(randomForestModel)
+#varImpPlot(randomForestModel)
+```
+
