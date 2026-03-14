@@ -148,6 +148,30 @@ DATA PRE-PROCESSING:
   
   testData <- testData |>
     select(-host_verifications)
+
+# Transform Categorical Variables to be Factors:
+  
+  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THHE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
+  
+  # host_response_time:
+  trainData$host_response_time <- as.factor(trainData$host_response_time)
+  testData$host_response_time  <- factor(testData$host_response_time, levels = levels(trainData$host_response_time))
+  
+  # host_is_superhost
+  trainData$host_is_superhost <- as.factor(trainData$host_is_superhost)
+  testData$host_is_superhost  <- factor(testData$host_is_superhost, levels = levels(trainData$host_is_superhost))
+  
+  # neighbourhood_ward
+  trainData$neighbourhood_ward <- as.factor(trainData$neighbourhood_ward)
+  testData$neighbourhood_ward  <- factor(testData$neighbourhood_ward, levels = levels(trainData$neighbourhood_ward))
+  
+  # room_type
+  trainData$room_type <- as.factor(trainData$room_type)
+  testData$room_type  <- factor(testData$room_type, levels = levels(trainData$room_type))
+  
+  # instant_bookable
+  trainData$instant_bookable <- as.factor(trainData$instant_bookable)
+  testData$instant_bookable  <- factor(testData$instant_bookable, levels = levels(trainData$instant_bookable))
   
 # HighHost Variable Classes Required for Model Types:
   
@@ -228,3 +252,41 @@ plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", 
 #varImpPlot(randomForestModel)
 ```
 
+CONVERTING HighHost TO BE NUMERIC:
+
+```{r}
+trainData$HighHost <- ifelse(trainData$HighHost == "Yes", 1, 0)
+testData$HighHost  <- ifelse(testData$HighHost == "Yes", 1, 0)
+```
+
+GBM BOOSTED TREE MODEL FITTING:
+
+```{r}
+#if (file.exists(gbmFile)) {
+#  load(gbmFile)
+#} else {
+  set.seed(2026)
+  
+  gbmModel <- gbm(
+    formula = HighHost ~ . - HighHost,
+    data = trainData,
+    distribution = "bernoulli",
+    n.trees = 1000,
+    interaction.depth = 3,
+    shrinkage = 0.01,
+    n.minobsinnode = 10,
+    cv.folds = 5,
+    verbose = FALSE
+  )
+
+#  save(gbmModel, file = gbmFile)
+#}
+```
+
+GBM BOOSTED TREE MODEL INSPECTION:
+
+```{r}
+print(gbmModel)
+bestTrees <- gbm.perf(gbmModel, method = "cv")
+summary(gbmModel, n.trees = bestTrees)
+```
