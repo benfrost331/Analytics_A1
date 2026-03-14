@@ -188,7 +188,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
   elasticNetResults <- do.call(rbind, elasticNetResults)
   best_model_EN <- elasticNetResults[which.max(elasticNetResults$auc),]
   best_model_EN
-  save(elasticNetModel, file = elasticNetFile)
+  save(elasticNetModel, file = elasticNetFile) # Change to save the best model (may need to rerun the best model)
 #}
 ```
 
