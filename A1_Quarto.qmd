@@ -13,6 +13,7 @@ library(glmnetUtils)
 library(randomForest)
 library(gbm)
 library(caret)
+library(ggplot2)
 ```
 
 ```{r, echo = FALSE}
@@ -189,25 +190,36 @@ elasticNetFile <- "elasticNetModel.RData"
 #} else 
 #{
   set.seed(2026)
+alphaGrid <- seq(0,1, by = 0.1)
 
+elasticNetResults <- lapply(alphaGrid, function(a) {  
   elasticNetModel <- glmnetUtils::cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = 0.6,       # Tune Later
-    nfolds = 10        
+    alpha = a,       # Tune Later
+    nfolds = 10,
+    type.measure = "auc"
   )
-
-  save(elasticNetModel, file = elasticNetFile)
+  
+  index <- which.min(abs(elasticNetModel$lambda - elasticNetModel$lambda.min)) 
+  
+  data.frame(alpha = a, lambda_min = elasticNetModel$lambda.min, auc = elasticNetModel$cvm[index])
+})
+  elasticNetResults <- do.call(rbind, elasticNetResults)
+  best_model_EN <- elasticNetResults[which.max(elasticNetResults$auc),]
+  best_model_EN
+  save(elasticNetModel, file = elasticNetFile) # Change to save the best model (may need to rerun the best model)
 #}
 ```
 
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
 
 ```{r, echo = FALSE}
-print(elasticNetModel)
-coef(elasticNetModel, s = "lambda.min")
-plot(elasticNetModel)
+plot(x = elasticNetResults$alpha, y = elasticNetResults$auc, type = "l")
+#print(elasticNetModel)
+#coef(elasticNetModel, s = "lambda.min")
+#plot(elasticNetModel)
 ```
 
 CONVERTING HighHost TO BE A FACTOR:
@@ -226,14 +238,35 @@ RANDOM FOREST FITTING:
 
   set.seed(2026)
 
-  randomForestModel <- randomForest(
-    HighHost ~ .,
-    data = trainData,
-    ntree = 500,
-    mtry = floor(sqrt(ncol(trainData) - 1)), #ncol(trainData) - 1
-    importance = TRUE
+  # Number of predictors excluding response
+  p <- ncol(trainData) - 1
+  
+  # Search space
+  rfGrid <- expand.grid(
+    mtry = c(floor(sqrt(p)), floor(p / 2)),
+    ntree = seq(200, 500, 25),
+    nodesize = c(2, 4, 7, 10)
   )
-
+  
+  # Fit all combinations and store final OOB error
+  rfResults <- lapply(seq_len(nrow(rfGrid)), function(i) {
+    
+    rfFit <- randomForest(
+      HighHost ~ .,
+      data = trainData,
+      ntree = rfGrid$ntree[i],
+      mtry = rfGrid$mtry[i],
+      nodesize = rfGrid$nodesize[i],
+      importance = TRUE
+    )
+    
+    data.frame(
+      mtry = rfGrid$mtry[i],
+      ntree = rfGrid$ntree[i],
+      nodesize = rfGrid$nodesize[i],
+      OOB_Error = rfFit$err.rate[nrow(rfFit$err.rate), "OOB"]
+    )
+  })
 #  save(randomForestModel, file = randomForestFile)
 #}
 ```
@@ -241,8 +274,28 @@ RANDOM FOREST FITTING:
 RANDOM FOREST FITTING INSPECTION:
 
 ```{r, echo = FALSE}
-randomForestModel
-plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
+rfResults <- do.call(rbind, rfResults)
+
+# Find best combination
+best_model_rf <- rfResults[which.min(rfResults$OOB_Error), ]
+best_model_rf
+
+# Plot tuning results
+ggplot(rfResults, aes(x = ntree, y = OOB_Error,
+                      colour = factor(nodesize),
+                      group = factor(nodesize))) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(~ mtry, scales = "fixed") +
+  labs(
+    title = "Random forest tuning results",
+    x = "Number of trees",
+    y = "OOB Error",
+    colour = "nodesize"
+  ) +
+  theme_minimal()
+#randomForestModel
+#plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
 #print(randomForestModel)
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
@@ -268,7 +321,7 @@ GBM BOOSTED TREE MODEL FITTING:
     formula = HighHost ~ . - HighHost,
     data = trainData,
     distribution = "bernoulli",
-    n.trees = 1000,
+    n.trees = 1500,
     interaction.depth = 3,
     shrinkage = 0.01,
     n.minobsinnode = 10,
@@ -284,8 +337,20 @@ GBM BOOSTED TREE MODEL INSPECTION:
 
 ```{r}
 print(gbmModel)
+
 bestTrees <- gbm.perf(gbmModel, method = "cv")
-summary(gbmModel, n.trees = bestTrees)
+
+importanceTable <- summary(gbmModel, n.trees = bestTrees, plotit = FALSE)
+par(mar = c(5, 14, 4, 2) + 0.1, las = 1)
+barplot(
+  rev(importanceTable$rel.inf),
+  names.arg = rev(importanceTable$var),
+  horiz = TRUE,
+  col = "blue",
+  border = "black",
+  xlab = "Relative Influence",
+  cex.names = 0.5
+)
 ```
 
 CONVERTING HighHost TO BE A FACTOR:
