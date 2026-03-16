@@ -101,13 +101,13 @@ testData  <- listings |> dplyr::slice(-trainIndex)
 DATA PRE-PROCESSING:
 
 ```{r echo = FALSE}
-# Remove id (Useless) & host_id (Target Leakage Prevention):
+# Remove id (Useless), host_id (Target Leakage Prevention) neighbourhood_ward (Collinear With Longitude & Latitude and Problematic):
 
   trainData <- trainData |>
-    select(-id, -host_id)
+    select(-id, -host_id, -neighbourhood_ward)
   
   testData <- testData |>
-    select(-id, -host_id)
+    select(-id, -host_id, -neighbourhood_ward)
 
 # Convert host_since to a Usable Numeric Predictor:
 
@@ -150,7 +150,7 @@ DATA PRE-PROCESSING:
 
 # Transform Categorical Variables to be Factors:
   
-  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THHE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
+  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
   
   # host_response_time:
   trainData$host_response_time <- as.factor(trainData$host_response_time)
@@ -159,10 +159,6 @@ DATA PRE-PROCESSING:
   # host_is_superhost
   trainData$host_is_superhost <- as.factor(trainData$host_is_superhost)
   testData$host_is_superhost  <- factor(testData$host_is_superhost, levels = levels(trainData$host_is_superhost))
-  
-  # neighbourhood_ward
-  trainData$neighbourhood_ward <- as.factor(trainData$neighbourhood_ward)
-  testData$neighbourhood_ward  <- factor(testData$neighbourhood_ward, levels = levels(trainData$neighbourhood_ward))
   
   # room_type
   trainData$room_type <- as.factor(trainData$room_type)
@@ -227,20 +223,14 @@ RANDOM FOREST FITTING:
 #if (file.exists(randomForestFile)) {
 #  load(randomForestFile)
 #} else {
-  
-  trainDataRF <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
-  select(-neighbourhood_ward)
-
-  testDataRF <- testData |>       # USE LATER WHEN TESTING
-    select(-neighbourhood_ward)
 
   set.seed(2026)
 
   randomForestModel <- randomForest(
     HighHost ~ .,
-    data = trainDataRF,
+    data = trainData,
     ntree = 500,
-    mtry = floor(sqrt(ncol(trainDataRF) - 1)), #ncol(trainDataRF) - 1
+    mtry = floor(sqrt(ncol(trainData) - 1)), #ncol(trainData) - 1
     importance = TRUE
   )
 
@@ -282,7 +272,7 @@ GBM BOOSTED TREE MODEL FITTING:
     interaction.depth = 3,
     shrinkage = 0.01,
     n.minobsinnode = 10,
-    cv.folds = 5,
+    cv.folds = 10,
     verbose = FALSE
   )
 
@@ -315,12 +305,6 @@ K-NEAREST NEIGHBOURS FITTING:
 #} else {
   set.seed(2026)
 
-  trainDataKNN <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
-  select(-neighbourhood_ward)
-
-  testDataKNN <- testData |>       # USE LATER WHEN TESTING
-    select(-neighbourhood_ward)
-
   knnControl <- trainControl(
     method = "cv",
     number = 10,
@@ -331,7 +315,7 @@ knnGrid <- expand.grid(k = seq(3, 25, by = 2))
 
   knnModel <- train(
     HighHost ~ .,
-    data = trainDataKNN,
+    data = trainData,
     method = "knn",
     trControl = knnControl,
     tuneGrid = knnGrid,
