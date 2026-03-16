@@ -23,9 +23,9 @@ listings <- read.csv("listings.csv")
 
 ## Introduction:
 
-The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. The analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. \[Maybe Discuss Potential Impact/Implications Here?\] Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
+The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. Based on any given listing observation the analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
 
-Our analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then defined with the property number threshold being determined using the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
+The analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then derived and defined with the property number threshold being determined using the training data. Several classification models are subsequently fitted and tuned, the models types include elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
 
 Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.
 
@@ -44,7 +44,7 @@ testDataC  <- listings |> dplyr::slice(-trainIndex)
 
 This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
 
-There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
+There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
 
 ```{r echo = FALSE}
 hostUnique <- trainDataC |> 
@@ -300,11 +300,27 @@ ggplot(rfResults, aes(x = ntree, y = OOB_Error,
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
 ```
+### GBM Boosted Tree Model:
 
+For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
 
-CONVERTING HighHost TO BE NUMERIC:
+Hyperparameter selection was carried out using a grid-search approach on the training set only. For each candidate combination of tuning parameters, a GBM model was fitted with 10-fold cross-validation and model performance was assessed using the cross-validated Bernoulli deviance. The preferred hyperparameter combination was the one that achieved the lowest cross-validated error without risk of overfitting to the training data. After identifying the best combination of values for these hyperparameters the final GBM model has been refitted using these values.
+
+The hyperparameter search space was:
+
+n.trees ∈ {500, 1000, 1500, 2000}
+
+interaction.depth ∈ {1, 3, 5}
+
+shrinkage ∈ {0.005, 0.01, 0.05}
+
+n.minobsinnode ∈ {5, 10, 20}
+
+This gives a total of 4 × 3 × 3 × 3 = 108 hyperparameter combinations evaluated.
+
 
 ```{r}
+# CONVERTING HighHost TO BE NUMERIC:
 trainData$HighHost <- ifelse(trainData$HighHost == "Yes", 1, 0)
 testData$HighHost  <- ifelse(testData$HighHost == "Yes", 1, 0)
 ```
@@ -316,46 +332,113 @@ GBM BOOSTED TREE MODEL FITTING:
 #  load(gbmFile)
 #} else {
   set.seed(2026)
+
+  gbmGrid <- expand.grid(
+  n.trees = c(500, 1000, 1500, 2000),
+  interaction.depth = c(1, 3, 5),
+  shrinkage = c(0.005, 0.01, 0.05),
+  n.minobsinnode = c(5, 10, 20))
   
-  gbmModel <- gbm(
-    formula = HighHost ~ . - HighHost,
+  gbmResults <- lapply(seq_len(nrow(gbmGrid)), function(i) {
+  
+  gbmFit <- gbm(
+    formula = HighHost ~ .,
     data = trainData,
     distribution = "bernoulli",
-    n.trees = 1500,
-    interaction.depth = 3,
-    shrinkage = 0.01,
-    n.minobsinnode = 10,
+    n.trees = gbmGrid$n.trees[i],
+    interaction.depth = gbmGrid$interaction.depth[i],
+    shrinkage = gbmGrid$shrinkage[i],
+    n.minobsinnode = gbmGrid$n.minobsinnode[i],
     cv.folds = 10,
     verbose = FALSE
   )
+  
+  bestIter <- gbm.perf(gbmFit, method = "cv", plot.it = FALSE)
+  bestCvError <- gbmFit$cv.error[bestIter]
+  
+  data.frame(
+    n.trees = gbmGrid$n.trees[i],
+    interaction.depth = gbmGrid$interaction.depth[i],
+    shrinkage = gbmGrid$shrinkage[i],
+    n.minobsinnode = gbmGrid$n.minobsinnode[i],
+    best_iter = bestIter,
+    CV_Error = bestCvError
+  )
+})
 
-#  save(gbmModel, file = gbmFile)
-#}
+gbmResults <- do.call(rbind, gbmResults)
+
+best_model_gbm <- gbmResults[which.min(gbmResults$CV_Error), ]
+best_model_gbm
+
+save(gbmModel, gbmResults, best_model_gbm, bestTrees, file = "gbm_all_objects.RData")
 ```
 
-GBM BOOSTED TREE MODEL INSPECTION:
+GBM BOOSTED TREE MODEL TUNING:
 
 ```{r}
-print(gbmModel)
+ggplot(
+  gbmResults,
+  aes(
+    x = n.trees,
+    y = CV_Error,
+    colour = factor(n.minobsinnode),
+    group = factor(n.minobsinnode)
+  )
+) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_grid(shrinkage ~ interaction.depth, labeller = label_both) +
+  labs(
+    title = "GBM Tuning Results",
+    x = "Number of trees",
+    y = "Cross-Validated Bernoulli Deviance",
+    colour = "minobsinnode"
+  ) +
+  theme_minimal()
 
-bestTrees <- gbm.perf(gbmModel, method = "cv")
-
-importanceTable <- summary(gbmModel, n.trees = bestTrees, plotit = FALSE)
-par(mar = c(5, 14, 4, 2) + 0.1, las = 1)
-barplot(
-  rev(importanceTable$rel.inf),
-  names.arg = rev(importanceTable$var),
-  horiz = TRUE,
-  col = "blue",
-  border = "black",
-  xlab = "Relative Influence",
-  cex.names = 0.5
-)
 ```
 
-CONVERTING HighHost TO BE A FACTOR:
+### K-Nearest Neighbours Model:
+
+For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors were centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
+
+In addition to tuning the number of neighbours, the model was also tuned over alternative candidate feature subsets. This was done because KNN can be highly sensitive to irrelevant or weak predictors: including too many variables can distort the distance calculation and reduce classification performance. A range of feature sets was therefore considered, covering core listing characteristics, host-related variables, review-related variables, availability measures, location variables, and broader combined sets. The final KNN specification was chosen as the combination of feature subset and k with the highest mean cross-validated ROC.
+
+The feature search space consisted of the following candidate subsets:
+
+Basic: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights
+
+Host: host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost, has_email_verification, has_phone_verification, has_work_email_verification
+
+Review: number_of_reviews, reviews_per_month, review_scores_rating
+
+Availability: availability_30, availability_60, availability_90, availability_365
+
+Location: latitude, longitude, room_type, instant_bookable
+
+Combined 1:
+price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights,
+host_since_days, host_response_rate, host_acceptance_rate, host_is_superhost,
+number_of_reviews, reviews_per_month, review_scores_rating,
+latitude, longitude, room_type, instant_bookable
+
+Combined 2:
+price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights,
+host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost,
+has_email_verification, has_phone_verification, has_work_email_verification,
+number_of_reviews, reviews_per_month, review_scores_rating,
+availability_30, availability_60, availability_90, availability_365,
+latitude, longitude, room_type, instant_bookable
+
+The neighbourhood size search space was:
+
+k∈ {3,5,7,…,25}
+
+So the KNN tuning process searched jointly across 7 candidate feature sets and 12 candidate values of k.
 
 ```{r, echo = FALSE}
+# CONVERTING HighHost TO BE A FACTOR:
 trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
@@ -363,6 +446,49 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 K-NEAREST NEIGHBOURS FITTING:
 
 ```{r}
+# REMOVE FEATURES WITH ZERO VARIANCE
+
+featureSets <- list(
+  Basic = c(
+    "price", "accommodates", "bathrooms", "bedrooms", "beds",
+    "minimum_nights", "maximum_nights"
+  ),
+  Host = c(
+    "host_since_days", "host_response_rate", "host_acceptance_rate",
+    "host_response_time", "host_is_superhost",
+    "has_email_verification", "has_phone_verification",
+    "has_work_email_verification"
+  ),
+  Review = c(
+    "number_of_reviews", "reviews_per_month", "review_scores_rating"
+  ),
+  Availability = c(
+    "availability_30", "availability_60", "availability_90", "availability_365"
+  ),
+  Location = c(
+    "latitude", "longitude", "room_type", "instant_bookable"
+  ),
+  Combined_1 = c(
+    "price", "accommodates", "bathrooms", "bedrooms", "beds",
+    "minimum_nights", "maximum_nights",
+    "host_since_days", "host_response_rate", "host_acceptance_rate",
+    "host_is_superhost",
+    "number_of_reviews", "reviews_per_month", "review_scores_rating",
+    "latitude", "longitude", "room_type", "instant_bookable"
+  ),
+  Combined_2 = c(
+    "price", "accommodates", "bathrooms", "bedrooms", "beds",
+    "minimum_nights", "maximum_nights",
+    "host_since_days", "host_response_rate", "host_acceptance_rate",
+    "host_response_time", "host_is_superhost",
+    "has_email_verification", "has_phone_verification",
+    "has_work_email_verification",
+    "number_of_reviews", "reviews_per_month", "review_scores_rating",
+    "availability_30", "availability_60", "availability_90", "availability_365",
+    "latitude", "longitude", "room_type", "instant_bookable"
+  )
+)
+
 #knnFile <- "knnModel.RData"
 
 #if (file.exists(knnFile)) {
@@ -374,19 +500,52 @@ K-NEAREST NEIGHBOURS FITTING:
     method = "cv",
     number = 10,
     classProbs = TRUE,
-    summaryFunction = twoClassSummary
+    summaryFunction = twoClassSummary,
+    verboseIter = TRUE
   )
-knnGrid <- expand.grid(k = seq(3, 25, by = 2))
+  
+  knnGrid <- expand.grid(k = seq(1, 25, by = 2))
 
-  knnModel <- train(
-    HighHost ~ .,
-    data = trainData,
-    method = "knn",
-    trControl = knnControl,
-    tuneGrid = knnGrid,
-    metric = "ROC",
-    preProcess = c("center", "scale")
-  )
+  knnFits <- list()
+  knnResults <- list()
+
+  for (setName in names(featureSets)) 
+  {
+  
+    vars <- featureSets[[setName]]
+    
+    trainSubset <- trainData[ , c(vars, "HighHost")]
+    
+    knnFit <- train(
+      HighHost ~ .,
+      data = trainSubset,
+      method = "knn",
+      trControl = knnControl,
+      tuneGrid = knnGrid,
+      metric = "ROC",
+      preProcess = c("center", "scale")
+    )
+    
+    knnFits[[setName]] <- knnFit
+    
+    temp <- knnFit$results
+    temp$FeatureSet <- setName
+    knnResults[[setName]] <- temp
+  }
+
+knnResults <- do.call(rbind, knnResults)
+
+best_knn <- knnResults[which.max(knnResults$ROC), ]
+best_knn
+
+save(
+  knnFits,
+  knnResults,
+  best_knn,
+  featureSets,
+  knnGrid,
+  file = "knn_all_objects.RData"
+)
 
 #  save(knnModel, file = knnFile)
 #}
@@ -395,8 +554,29 @@ knnGrid <- expand.grid(k = seq(3, 25, by = 2))
 K-NEAREST NEIGHBOURS INSPECTION:
 
 ```{r}
-print(knnModel)
-plot(knnModel)
+load("knn_all_objects.RData")
+
+ggplot(
+  knnResults,
+  aes(
+    x = k,
+    y = ROC,
+    colour = FeatureSet,
+    group = FeatureSet
+  )
+) +
+  geom_line() +
+  geom_point(size = 2) +
+  labs(
+    title = "K-Nearest Neighbours Tuning Results",
+    x = "Number of Neighbours (k)",
+    y = "Mean CV ROC",
+    colour = "Feature Set"
+  ) +
+  theme_minimal()
+
+print(best_knn)
+plot(best_knn)
 ```
 
 
