@@ -5,6 +5,7 @@ authors: "Ben Mitchell & Ben Frost"
 format: html
 editor: visual
 ---
+
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
 # Required Package Installation:
 library(tidyverse)
@@ -300,6 +301,7 @@ ggplot(rfResults, aes(x = ntree, y = OOB_Error,
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
 ```
+
 ### GBM Boosted Tree Model:
 
 For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
@@ -308,16 +310,15 @@ Hyperparameter selection was carried out using a grid-search approach on the tra
 
 The hyperparameter search space was:
 
-n.trees ∈ {500, 1000, 1500, 2000}
+n.trees ∈ {500, 1000, 1500, 2000, 2500, 3000}
 
-interaction.depth ∈ {1, 3, 5}
+interaction.depth ∈ {1, 3, 5, 8, 10}
 
-shrinkage ∈ {0.005, 0.01, 0.05}
+shrinkage ∈ {0.005, 0.01, 0.05, 0.1, 0.15}
 
 n.minobsinnode ∈ {5, 10, 20}
 
-This gives a total of 4 × 3 × 3 × 3 = 108 hyperparameter combinations evaluated.
-
+This gives a total of 6 × 5 × 5 × 3 =  hyperparameter combinations evaluated.
 
 ```{r}
 # CONVERTING HighHost TO BE NUMERIC:
@@ -334,9 +335,9 @@ GBM BOOSTED TREE MODEL FITTING:
   set.seed(2026)
 
   gbmGrid <- expand.grid(
-  n.trees = c(500, 1000, 1500, 2000),
-  interaction.depth = c(1, 3, 5),
-  shrinkage = c(0.005, 0.01, 0.05),
+  n.trees = c(3000),#500, 1000, 1500, 2000, 2500),
+  interaction.depth = c(1, 3, 5, 8, 10),
+  shrinkage = c(0.005, 0.01, 0.05, 0.1, 0.15),
   n.minobsinnode = c(5, 10, 20))
   
   gbmResults <- lapply(seq_len(nrow(gbmGrid)), function(i) {
@@ -350,7 +351,7 @@ GBM BOOSTED TREE MODEL FITTING:
     shrinkage = gbmGrid$shrinkage[i],
     n.minobsinnode = gbmGrid$n.minobsinnode[i],
     cv.folds = 10,
-    verbose = FALSE
+    verbose = TRUE
   )
   
   bestIter <- gbm.perf(gbmFit, method = "cv", plot.it = FALSE)
@@ -371,7 +372,7 @@ gbmResults <- do.call(rbind, gbmResults)
 best_model_gbm <- gbmResults[which.min(gbmResults$CV_Error), ]
 best_model_gbm
 
-save(gbmModel, gbmResults, best_model_gbm, bestTrees, file = "gbm_all_objects.RData")
+#save(gbmModel, gbmResults, best_model_gbm, bestTrees, file = "gbm_all_objects.RData")
 ```
 
 GBM BOOSTED TREE MODEL TUNING:
@@ -391,9 +392,9 @@ ggplot(
   facet_grid(shrinkage ~ interaction.depth, labeller = label_both) +
   labs(
     title = "GBM Tuning Results",
-    x = "Number of trees",
+    x = "Number of Trees",
     y = "Cross-Validated Bernoulli Deviance",
-    colour = "minobsinnode"
+    colour = "Min # of Obs in Node"
   ) +
   theme_minimal()
 
@@ -417,19 +418,9 @@ Availability: availability_30, availability_60, availability_90, availability_36
 
 Location: latitude, longitude, room_type, instant_bookable
 
-Combined 1:
-price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights,
-host_since_days, host_response_rate, host_acceptance_rate, host_is_superhost,
-number_of_reviews, reviews_per_month, review_scores_rating,
-latitude, longitude, room_type, instant_bookable
+Combined 1: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights, host_since_days, host_response_rate, host_acceptance_rate, host_is_superhost, number_of_reviews, reviews_per_month, review_scores_rating, latitude, longitude, room_type, instant_bookable
 
-Combined 2:
-price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights,
-host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost,
-has_email_verification, has_phone_verification, has_work_email_verification,
-number_of_reviews, reviews_per_month, review_scores_rating,
-availability_30, availability_60, availability_90, availability_365,
-latitude, longitude, room_type, instant_bookable
+Combined 2: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights, host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost, has_email_verification, has_phone_verification, has_work_email_verification, number_of_reviews, reviews_per_month, review_scores_rating, availability_30, availability_60, availability_90, availability_365, latitude, longitude, room_type, instant_bookable
 
 The neighbourhood size search space was:
 
@@ -437,15 +428,14 @@ k∈ {3,5,7,…,25}
 
 So the KNN tuning process searched jointly across 7 candidate feature sets and 12 candidate values of k.
 
-```{r, echo = FALSE}
+```{r echo = FALSE}
 # CONVERTING HighHost TO BE A FACTOR:
 trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
 
-K-NEAREST NEIGHBOURS FITTING:
-
-```{r}
+```{r echo = FALSE}
+# K-NEAREST NEIGHBOURS FITTING:
 # REMOVE FEATURES WITH ZERO VARIANCE
 
 featureSets <- list(
@@ -553,7 +543,8 @@ save(
 
 K-NEAREST NEIGHBOURS INSPECTION:
 
-```{r}
+```{r echo = FALSE}
+# K-NEAREST NEIGHBOURS TUNING:
 load("knn_all_objects.RData")
 
 ggplot(
@@ -574,9 +565,8 @@ ggplot(
     colour = "Feature Set"
   ) +
   theme_minimal()
-
-print(best_knn)
-plot(best_knn)
 ```
 
+The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated ROC, the preferred specification uses the Host feature set. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that host-related variables carry the most predictive signal for this classifier.
 
+Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities.
