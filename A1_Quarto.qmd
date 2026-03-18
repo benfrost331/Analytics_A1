@@ -311,6 +311,7 @@ RANDOM FOREST FITTING:
 
 if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
   load(randomForestFile)
+  load(rfResultsFile)
 } else {
 
   set.seed(2026)
@@ -467,12 +468,6 @@ shrinkage ∈ {0.01, 0.05, 0.1}
 n.minobsinnode ∈ {5, 10, 20}
 
 This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.
-
-```{r}
-# CONVERTING HighHost TO BE A FACTOR:
-trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-```
 
 GBM BOOSTED TREE MODEL FITTING:
 
@@ -649,15 +644,14 @@ if (file.exists("gbm_all_tuned_objects.RData")) {
 }
 # Metrics table in requested order
 gbmMetricTable <- data.frame(
+  Model = "GBM Boosted Tree",
   Accuracy = unname(cm$overall["Accuracy"]),
-  `F1 Score` = unname(cm$byClass["F1"]),
+  F1_Score = unname(cm$byClass["F1"]),
   Precision = unname(cm$byClass["Precision"]),
   Recall = unname(cm$byClass["Recall"]),
   Specificity = unname(cm$byClass["Specificity"]),
   AUROC = aucValue
 )
-
-round(gbmMetricTable,4)
 
 ```
 
@@ -684,12 +678,6 @@ The neighbourhood size search space was:
 k ∈ {3,5,7,…,25}
 
 So the KNN tuning process searched jointly across 5 candidate feature sets and 12 candidate values of k.
-
-```{r echo = FALSE}
-# CONVERTING HighHost TO BE A FACTOR:
-trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-```
 
 ```{r echo = FALSE}
 # K-NEAREST NEIGHBOURS FITTING:
@@ -804,10 +792,12 @@ Despite the highest mean cross-validated ROC being achieved by the Host feature 
 
 ```{r, echo = FALSE}
 
-en_outoffold_prob <- elasticNetModel$fit.preval[,index_en]
+index_lambda_en <- which.min(abs(elasticNetModel$lambda-elasticNetModel$lambda.min))
+
+en_outoffold_prob <- elasticNetModel$fit.preval[,index_lambda_en]
 en_outoffold_pred <- ifelse(en_outoffold_prob >= 0.5, 1, 0)
 
-y_true_en <- trainData$HighHost
+y_true_en <- ifelse(trainData$HighHost == "Yes", 1, 0)
 
 TP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 1)
 TN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 0)
@@ -988,13 +978,32 @@ if (file.exists("knn_all_tuned_objects.RData")) {
 
 # Metrics table in requested order
 knnMetricTable <- data.frame(
+  Model = "KNN",
   Accuracy = unname(cm$overall["Accuracy"]),
-  `F1 Score` = unname(cm$byClass["F1"]),
+  F1_Score = unname(cm$byClass["F1"]),
   Precision = unname(cm$byClass["Precision"]),
   Recall = unname(cm$byClass["Recall"]),
   Specificity = unname(cm$byClass["Specificity"]),
   AUROC = aucValue
 )
 
-round(knnMetricTable,4)
+```
+
+```{r, echo = FALSE}
+
+all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
+
+knitr::kable(all_metrics,
+             digits = 3, caption = "CV perfomance metrics",
+             col.names = c("Model", "Accuracy", "F1 score", "Precision", "Recall", "Specificity", "AUROC"),
+             align = c("l", "c", "c", "c", "c", "c", "c"))
+
+metric_long <- pivot_longer(all_metrics, cols = -Model, names_to = "Metric", values_to = "Value")
+
+ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
+  geom_col(position = "dodge") +
+  ylim(0,1) +
+  labs(title = "Cross-Validated Performance Metrics by Model", x = NULL, y = "Metric Value") +
+  theme_minimal()
+
 ```
