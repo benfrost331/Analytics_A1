@@ -449,8 +449,6 @@ We can see that the optimal number of trees was on the upper boundary of our tun
 
 The final random forest model was then refitted on the full training set using these selected hyper-parameters.
 
-#maybe extend mtry beyond 12.
-
 ### GBM Boosted Tree Model:
 
 For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
@@ -661,17 +659,35 @@ For the K-nearest neighbours model, a supervised classification approach was use
 
 In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature's selection in it being dependent on its Relative Influence as depicted below;
 
+```{r}
+load("gbm_all_objects.RData")
+importanceTable <- summary(gbmModel, n.trees = 300, plotit = FALSE)
+
+par(mar = c(5, 14, 4, 2) + 0.1, las = 1)
+
+barplot(
+  rev(importanceTable$rel.inf),
+  names.arg = rev(importanceTable$var),
+  horiz = TRUE,
+  col = "blue",
+  border = "black",
+  xlab = "Relative Influence",
+  cex.names = 0.5
+)
+```
+
+
 The feature search space consisted of the following candidate subsets:
 
 Subset1: host_acceptance_rate, host_response_time, host_since_days
 
 Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
 
-Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
+Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights 
 
 Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
 
-Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
+Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price 
 
 The neighbourhood size search space was:
 
@@ -693,10 +709,7 @@ featureSets <- list(
 
   Subset4 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude"),
 
-  Subset5 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude", "price")
-
-)
-
+  Subset5 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude", "price"))
 
 if (file.exists("knn_all_objects.RData")) {
   load("knn_all_objects.RData")
@@ -891,10 +904,6 @@ RF_Results <- data.frame(
 save(RF_Results, file = randomForestMetricsFile)
 
 }
-
-
-
-
 ```
 
 TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
@@ -1007,3 +1016,100 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
   theme_minimal()
 
 ```
+
+## Question 3:
+
+###a)
+
+```{r, echo = FALSE}
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+```
+
+```{r}
+set.seed(2026)
+
+folds <- createFolds(trainData$HighHost, k = 10, returnTrain = FALSE)
+
+cvPred <- data.frame(
+  obs = trainData$HighHost,
+  probYes = NA_real_
+)
+
+for (i in seq_along(folds)) {
+  
+  validIndex <- folds[[i]]
+  trainFold <- trainData[-validIndex, ]
+  validFold <- trainData[validIndex, ]
+  
+  rfFoldModel <- randomForest(
+    HighHost ~ .,
+    data = trainFold,
+    mtry = 4,
+    ntree = 200,
+    nodesize = 5,
+    importance = FALSE
+  )
+  
+  cvPred$probYes[validIndex] <- predict(
+    rfFoldModel,
+    newdata = validFold,
+    type = "prob"
+  )[ , "Yes"]
+}
+```
+
+```{r}
+metricAtTau <- function(obs, probYes, tau) {
+  
+  predClass <- ifelse(probYes >= tau, "Yes", "No")
+  predClass <- factor(predClass, levels = c("No", "Yes"))
+  obs <- factor(obs, levels = c("No", "Yes"))
+  
+  cm <- confusionMatrix(
+    data = predClass,
+    reference = obs,
+    positive = "Yes"
+  )
+  
+  data.frame(
+    tau = tau,
+    Accuracy = unname(cm$overall["Accuracy"]),
+    `F1 Score` = unname(cm$byClass["F1"]),
+    Precision = unname(cm$byClass["Precision"]),
+    Recall = unname(cm$byClass["Recall"]),
+    Specificity = unname(cm$byClass["Specificity"])
+  )
+}
+```
+
+```{r}
+tauGrid <- seq(0.01, 0.99, by = 0.01)
+
+cvTauResults <- do.call(
+  rbind,
+  lapply(tauGrid, function(tau) metricAtTau(cvPred$obs, cvPred$probYes, tau))
+)
+
+bestTauRow <- cvTauResults[which.max(cvTauResults$`F1 Score`), ]
+bestTauRow
+```
+
+```{r}
+ggplot(cvTauResults, aes(x = tau, y = `F1 Score`)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "red") +
+  geom_point(
+    data = bestTauRow,
+    aes(x = tau, y = `F1 Score`),
+    colour = "red",
+    size = 3
+  ) +
+  labs(
+    title = "CV F1 Score as a Function of Threshold",
+    x = expression(tau),
+    y = "CV F1 Score"
+  ) +
+  theme_minimal()
+```
+
