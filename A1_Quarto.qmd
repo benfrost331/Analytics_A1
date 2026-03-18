@@ -16,6 +16,8 @@ library(gbm)
 library(caret)
 library(ggplot2)
 library(pROC)
+library(pdp)
+library(maps)
 ```
 
 ```{r, echo = FALSE}
@@ -681,18 +683,17 @@ barplot(
 )
 ```
 
-
 The feature search space consisted of the following candidate subsets:
 
 Subset1: host_acceptance_rate, host_response_time, host_since_days
 
 Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
 
-Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights 
+Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
 
 Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
 
-Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price 
+Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
 
 The neighbourhood size search space was:
 
@@ -1117,4 +1118,3 @@ ggplot(cvTauResults, aes(x = tau, y = `F1 Score`)) +
   ) +
   theme_minimal()
 ```
-

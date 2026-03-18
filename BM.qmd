@@ -16,6 +16,8 @@ library(gbm)
 library(caret)
 library(ggplot2)
 library(pROC)
+library(pdp)
+library(maps)
 ```
 
 ```{r, echo = FALSE}
@@ -1010,43 +1012,59 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
 
 ### Question 4
 
+```{r}
+load("gbm_all_objects.RData")
+importanceTable <- summary(gbmModel, n.trees = 300, plotit = FALSE)
+
+par(mar = c(5, 14, 4, 2) + 0.1, las = 1)
+
+barplot(
+  rev(importanceTable$rel.inf),
+  names.arg = rev(importanceTable$var),
+  horiz = TRUE,
+  col = "blue",
+  border = "black",
+  xlab = "Relative Influence",
+  cex.names = 0.5
+)
+```
+
 ```{r, echo = FALSE}
 
-latlong_pd <- plot.gbm(calif_fe_gbm, c('Longitude', 'Latitude'), return.grid = T)
+partiald_latlong <- pdp::partial(object = randomForestModel,
+                           pred.var = c("longitude", "latitude"),
+                           train = trainData,
+                           which.class = "Yes",
+                           prob = TRUE,
+                           grid.resolution =30)
 
-# Same colour scale as before
-n_breaks <- 9
-my_cols <- brewer.pal(n_breaks, 'YlOrBr')[cut(latlong_pd$y, breaks = n_breaks)]
+sa_map <- ggplot2::map_data("world", region = "South Africa")
 
-# Plot the partial dependence values
-plot(latlong_pd$Longitude, latlong_pd$Latitude, pch = 15, 
-     xlab = 'Longitude', ylab = 'Latitude', col = my_cols)
-legend(x = 'topright', bty = 'n', title = 'Log Median House Price', cex = 0.9,
-       legend = round(seq(min(latlong_pd$y), max(latlong_pd$y), length.out = n_breaks), 2),
-       fill = brewer.pal(n_breaks, 'YlOrBr'))
-
-# Add the state border
-par(new = TRUE)
-map('state', 'california', add = T, lwd = 2) |> invisible()
-text(-123, 35, 'Pacific Ocean')
+ggplot(partiald_latlong, aes(x = longitude, y = latitude, fill = yhat)) +
+  geom_tile() +
+  geom_polygon(
+    data = sa_map,
+    aes(x = long, y = lat, group = group),
+    inherit.aes = FALSE,
+    fill = NA,
+    colour = "black",
+    linewidth = 0.5
+  ) +
+  coord_quickmap(
+  xlim = c(18.3202, 18.9203),
+  ylim = c(-34.25296, -33.65576),
+  expand = FALSE
+) +
+  labs(
+    x = "Longitude",
+    y = "Latitude",
+    fill = "Predicted probability"
+  )
 
 ```
 
 ```{r}
 
-library(latticeExtra)
 
-locs <- distinct(calif, Longitude, Latitude)
-p <- pdp::partial(calif_fe_gbm, c('Longitude', 'Latitude'), locs, n.trees = d)
 
-# Same colour scale as before
-n_breaks <- 9
-my_cols <- colorRampPalette(brewer.pal(n_breaks, 'YlOrBr'))
-
-pp <- plotPartial(p, col.regions = my_cols(100))
-
-# Add the state border. plotPartial creates a lattice be default
-my_map <- map_data('state', 'california')
-border_layer <- latticeExtra::layer(panel.polygon(my_map, col = 'transparent'))
-pp + border_layer
 ```
