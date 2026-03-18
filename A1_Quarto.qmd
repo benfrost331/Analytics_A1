@@ -15,6 +15,7 @@ library(randomForest)
 library(gbm)
 library(caret)
 library(ggplot2)
+library(pROC)
 ```
 
 ```{r, echo = FALSE}
@@ -183,45 +184,113 @@ DATA PRE-PROCESSING:
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION FITTING:
 
 ```{r, echo = FALSE}
-elasticNetFile <- "elasticNetModel.RData"
+  elasticNetResultsFile <- "elasticNetResults.RData"
+  elasticNetFile <- "elasticNetModel.RData"
 
-#if (file.exists(elasticNetFile))
-#{
-#  load(elasticNetFile)
-#} else 
-#{
+if (file.exists(elasticNetFile) && file.exists(elasticNetResultsFile))
+{
+  load(elasticNetFile)
+  load(elasticNetResultsFile)
+} else 
+{
   set.seed(2026)
-alphaGrid <- seq(0,1, by = 0.1)
+alphaGrid <- seq(0,1, by = 0.01)
 
 elasticNetResults <- lapply(alphaGrid, function(a) {  
-  elasticNetModel <- glmnetUtils::cv.glmnet(
+  elasticNetFits <- glmnetUtils::cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
     alpha = a,       # Tune Later
     nfolds = 10,
-    type.measure = "auc"
+    type.measure = "auc",
+    trace.it = FALSE
+  )
+  index <- which.min(abs(elasticNetFits$lambda - elasticNetFits$lambda.min))
+  
+  coeficients <- coef(elasticNetFits, s = "lambda.min")
+  n_nonzero <- sum(as.vector(coeficients)[-1] != 0) 
+  
+  list(
+    fit = elasticNetFits,
+    summary = data.frame(alpha = a,
+      lambda_min = elasticNetFits$lambda.min,
+      auc = elasticNetFits$cvm[index]),
+      se = elasticNetFits$cvsd[index],
+      lambda_min = elasticNetFits$lambda.min,
+      lambda_1se = elasticNetFits$lambda.1se,
+      n_nonzero = n_nonzero
+  )
+})
+  
+
+  elasticNetResults <- do.call(rbind, 
+    lapply(elasticNetResults, function(x) x$summary)
+    )
+  
+  best_index_EN <- which.max(elasticNetResults$auc)
+  best_alpha_EN <- elasticNetResults$alpha[best_index_EN]
+  best_auc <- elasticNetResults$auc[best_index_EN] #RENAME TO INCLUDE EN
+  best_se <- elasticNetResults$se[best_index_EN]
+  
+  elasticNetModel <- glmnetUtils::cv.glmnet(
+    HighHost ~ .,
+    data = trainData,
+    family = "binomial",
+    alpha = best_alpha_EN,       
+    nfolds = 10,
+    type.measure = "auc",
+    trace.it = TRUE
   )
   
-  index <- which.min(abs(elasticNetModel$lambda - elasticNetModel$lambda.min)) 
   
-  data.frame(alpha = a, lambda_min = elasticNetModel$lambda.min, auc = elasticNetModel$cvm[index])
-})
-  elasticNetResults <- do.call(rbind, elasticNetResults)
-  best_model_EN <- elasticNetResults[which.max(elasticNetResults$auc),]
-  best_model_EN
+  save(elasticNetResults, file = elasticNetResultsFile)
   save(elasticNetModel, file = elasticNetFile) # Change to save the best model (may need to rerun the best model)
-#}
+}
 ```
 
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
 
 ```{r, echo = FALSE}
-plot(x = elasticNetResults$alpha, y = elasticNetResults$auc, type = "l")
-#print(elasticNetModel)
-#coef(elasticNetModel, s = "lambda.min")
-#plot(elasticNetModel)
+plot(elasticNetResults$alpha, elasticNetResults$auc,
+     type = "l",
+     ylab = "AUROC",
+     xlab = "Alpha Value")
+
+index_en <- which.max(elasticNetResults$auc)
+
+points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19) 
+
+segments(x0 = min(elasticNetResults$alpha[index_en]), y0 = elasticNetResults$alpha[index_en],
+         x1 = elasticNetResults$alpha[index_en],               y1 = elasticNetResults$auc[index_en],
+         lty = 2)
+
+y_bottom <- par("usr")[3]
+segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
+         x1 = elasticNetResults$alpha[index_en], y1 = elasticNetResults$auc[index_en],
+         lty = 2)
+
+text(x = elasticNetResults$alpha[index_en],
+     y = y_bottom,
+     labels = paste0("alpha = ", elasticNetResults$alpha[index_en]),
+     pos = 1,      
+     xpd = NA)
+
+
+print(elasticNetModel)
+coef(elasticNetModel, s = "lambda.min")
+plot(elasticNetModel) #check werid plateau at 1 factor
 ```
+
+The Regularised Elastic-Net Regression Model was used as a binary classification model for predicting whether a listing is a high host or not. Logistic regression was appropriate here because the response variable is binary, and it models the probability that an observation belongs to a class using the log-odds function. With a large set of predictors, ordinary logistic regression may over-fit. This is addressed by regularization, through the elastic-net penalty.
+
+The elastic-net penalty combines the L1 (lasso) and L2 (ridge) penalties. The lasso component performs variable selection, shrinking some coefficients exactly to zero, while the ridge component shrinks coefficients to zero without necessarily removing them. Elastic-net is thus a useful combination of lasso and ridge regression.
+
+We used the training set to fit our model, where we tuned the model to the two hyper-parameters: α, which controls the balance between ridge and lasso penalization, and λ, which controls the level of the penalty.
+
+To tune the model we searched over the range of α, 0 to 1, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).
+
+The optimal alpha value that we chose was α = 0.23, and the corresponding lambda value of λ = 0.0001935441, and we then refitted the final elastic-net model on the training set with this chosen α value and its corresponding optimal λ.
 
 CONVERTING HighHost TO BE A FACTOR:
 
@@ -233,56 +302,102 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 RANDOM FOREST FITTING:
 
 ```{r, echo = FALSE}
-#if (file.exists(randomForestFile)) {
-#  load(randomForestFile)
-#} else {
+
+  rfResultsFile <- "rfResults.RData"
+  randomForestFile <- "randomForestModel.RData"
+
+if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
+  load(randomForestFile)
+} else {
 
   set.seed(2026)
-
-  # Number of predictors excluding response
+  
+  foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+  
   p <- ncol(trainData) - 1
   
-  # Search space
+  mtry_grid <- c(2,4,6,8,10,12)
+  
+  ntree_grid <- c(300, 500, 700)
+  
+  nodesize_grid <- c(1,5,10)
+  
   rfGrid <- expand.grid(
-    mtry = c(floor(sqrt(p)), floor(p / 2)),
-    ntree = seq(200, 500, 25),
-    nodesize = c(2, 4, 7, 10)
+    mtry = mtry_grid,
+    ntree = ntree_grid,
+    nodesize = nodesize_grid
+    )      # REPLACE VALUES TO PROPERLY TUNE
+  
+  
+rfResults <- lapply(1:nrow(rfGrid), function(i) {
+  this_mtry     <- rfGrid$mtry[i]
+  this_ntree    <- rfGrid$ntree[i]
+  this_nodesize <- rfGrid$nodesize[i]
+  
+  fold_auc <- numeric(10)
+  
+  for (k in 1:10) {
+    
+    train_fold <- trainData[foldid != k, ]
+    valid_fold <- trainData[foldid == k, ]
+    
+    rf_fit <- randomForest(
+      HighHost ~ .,
+      data = train_fold,
+      mtry = this_mtry,
+      ntree = this_ntree,
+      nodesize = this_nodesize
+    )
+    
+    prob_yes <- predict(rf_fit, newdata = valid_fold, type = "prob")[, "Yes"]
+    
+    fold_auc[k] <- as.numeric(
+      auc(
+        roc(response = valid_fold$HighHost,
+            predictor = prob_yes,
+            levels = c("No", "Yes"),
+            direction = "<")))
+  }
+  
+  data.frame(
+    mtry = this_mtry,
+    ntree = this_ntree,
+    nodesize = this_nodesize,
+    mean_auc = mean(fold_auc),
+    sd_auc = sd(fold_auc))
+})
+  
+  rfResults <- do.call(rbind, rfResults)
+  
+
+ 
+  best_model_rf <- rfResults[which.min(rfResults$mean_auc), ]
+  best_model_rf
+  
+  save(rfResults, file = rfResultsFile)
+  
+  randomForestModel <- randomForest(
+    HighHost ~ .,
+    data = trainData,
+    ntree = best_model_rf$ntree,
+    mtry = best_model_rf$mtry, 
+    nodesize = best_model_rf$nodesize,
+    importance = TRUE
   )
   
-  # Fit all combinations and store final OOB error
-  rfResults <- lapply(seq_len(nrow(rfGrid)), function(i) {
-    
-    rfFit <- randomForest(
-      HighHost ~ .,
-      data = trainData,
-      ntree = rfGrid$ntree[i],
-      mtry = rfGrid$mtry[i],
-      nodesize = rfGrid$nodesize[i],
-      importance = TRUE
-    )
-    
-    data.frame(
-      mtry = rfGrid$mtry[i],
-      ntree = rfGrid$ntree[i],
-      nodesize = rfGrid$nodesize[i],
-      OOB_Error = rfFit$err.rate[nrow(rfFit$err.rate), "OOB"]
-    )
-  })
+  
+  save(randomForestModel, file = randomForestFile)
+  
 #  save(randomForestModel, file = randomForestFile)
-#}
+}
 ```
 
 RANDOM FOREST FITTING INSPECTION:
 
 ```{r, echo = FALSE}
-rfResults <- do.call(rbind, rfResults)
 
-# Find best combination
-best_model_rf <- rfResults[which.min(rfResults$OOB_Error), ]
-best_model_rf
-
-# Plot tuning results
-ggplot(rfResults, aes(x = ntree, y = OOB_Error,
+library(ggplot2)
+ggplot(rfResults, aes(x = ntree, y = mean_auc,
                       colour = factor(nodesize),
                       group = factor(nodesize))) +
   geom_line() +
@@ -291,16 +406,46 @@ ggplot(rfResults, aes(x = ntree, y = OOB_Error,
   labs(
     title = "Random forest tuning results",
     x = "Number of trees",
-    y = "OOB Error",
+    y = "AUROC",
     colour = "nodesize"
   ) +
   theme_minimal()
-#randomForestModel
-#plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
+
+
+randomForestModel
+plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
 #print(randomForestModel)
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
 ```
+
+We used a random forest classifier to predict the binary response variable, HighHost. Random Forests are a tree-based method that build a large number of classification trees on bootstrap samples of the training data and then combine their predictions. This approach is useful because it can capture non-linear relationships and interactions between predictors. It is also generally less prone to over fitting than a single decision tree.
+
+At each split in the tree, only a random subset of predictors are considered. This introduces randomness and reduces correlation between trees, which improves the overall model. Since the outcome is binary, the response variable was treated as a factor so that the model was fitted as a classification forest.
+
+The model was fitted using the training set only. The hyper-parameters used to tune were:
+
+-   mtry = the number of predictors randomly chosen at each split
+
+-   ntree = the total number of trees grown in the forest
+
+-   nodesize = the minimum final node size, which dictates how deep the trees grow
+
+$mtry \in \{2,4,6,8,10,12\}$
+
+$ntree \in \{300,500,700\}$
+
+$nodesize \in \{1,5,10\}$
+
+This gave a total of $6 \times 3 \times 3 = 54$ different models. The mtry values were chosen to cover values around the default value of approximately $\sqrt{p}$, where $p$ is the number of predictors. The ntree values were chosen to compare a relatively small, moderate and large forest, and the nodesize values were chosen to allow a comparison between shallower, more moderate and deeper trees.
+
+Hyper-parameter tuning was performed on 10-fold cross-validation on the training set. For each different combination of hyper-parameters, a new model was trained on 9 folds and the AUROC was calculated on the remaining fold. The mean AUROC across the 10-folds was then used to tune the model. The selected random forest hyper-parameters were then chosen to be: mtry = 12, ntree = 700 and nodesize = 1.
+
+We can see that the optimal number of trees was on the upper boundary of our tuning Grid, but looking at our plots, we can see that the AUROC with respect to ntree is close to plateaued, so by extending our grid we would not gain much more accuracy. The same can be said for the mtry, as once mtry gets to 8, 10 and 12, the increases in AUROC were small.
+
+The final random forest model was then refitted on the full training set using these selected hyper-parameters.
+
+#maybe extend mtry beyond 12.
 
 ### GBM Boosted Tree Model:
 
@@ -310,79 +455,72 @@ Hyperparameter selection was carried out using a grid-search approach on the tra
 
 The hyperparameter search space was:
 
-n.trees ∈ {500, 1000, 1500, 2000, 2500, 3000}
+n.trees ∈ {500, 750, 1000, 1250, 1500}
 
-interaction.depth ∈ {1, 3, 5, 8, 10}
+interaction.depth ∈ {3, 5, 8, 10}
 
-shrinkage ∈ {0.005, 0.01, 0.05, 0.1, 0.15}
+shrinkage ∈ {0.01, 0.05, 0.1}
 
 n.minobsinnode ∈ {5, 10, 20}
 
 This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.
 
 ```{r}
-# CONVERTING HighHost TO BE NUMERIC:
-trainData$HighHost <- ifelse(trainData$HighHost == "Yes", 1, 0)
-testData$HighHost  <- ifelse(testData$HighHost == "Yes", 1, 0)
+# CONVERTING HighHost TO BE A FACTOR:
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
 
 GBM BOOSTED TREE MODEL FITTING:
 
 ```{r}
-#if (file.exists(gbmFile)) {
-#  load(gbmFile)
+#if (file.exists("gbm_caret_tuning_objects.RData")) {
+#  load("gbm_caret_tuning_objects.RData")
 #} else {
   set.seed(2026)
 
+  gbmControl <- trainControl(
+  method = "cv",
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  verboseIter = TRUE
+  )
+  
   gbmGrid <- expand.grid(
-  n.trees = c(500, 750, 1000, 1250, 1500),
-  interaction.depth = c(3, 5, 8, 10),
-  shrinkage = c(0.01, 0.05, 0.1),
-  n.minobsinnode = c(5, 10, 20))
+    n.trees = c(500, 750, 1000, 1250, 1500),
+    interaction.depth = c(3, 5, 8, 10),
+    shrinkage = c(0.01, 0.05, 0.1),
+    n.minobsinnode = c(5, 10, 20)
+  )
   
-  gbmResults <- lapply(seq_len(nrow(gbmGrid)), function(i) {
-  
-  gbmFit <- gbm(
-    formula = HighHost ~ .,
+  gbmCaretModel <- train(
+    HighHost ~ .,
     data = trainData,
-    distribution = "bernoulli",
-    n.trees = gbmGrid$n.trees[i],
-    interaction.depth = gbmGrid$interaction.depth[i],
-    shrinkage = gbmGrid$shrinkage[i],
-    n.minobsinnode = gbmGrid$n.minobsinnode[i],
-    cv.folds = 10,
-    verbose = TRUE
+    method = "gbm",
+    trControl = gbmControl,
+    tuneGrid = gbmGrid,
+    metric = "ROC",
+    verbose = FALSE
   )
   
-  bestIter <- gbm.perf(gbmFit, method = "cv", plot.it = FALSE)
-  bestCvError <- gbmFit$cv.error[bestIter]
+  best_model_gbm <- gbmCaretModel$bestTune
+  best_model_gbm
   
-  data.frame(
-    n.trees = gbmGrid$n.trees[i],
-    interaction.depth = gbmGrid$interaction.depth[i],
-    shrinkage = gbmGrid$shrinkage[i],
-    n.minobsinnode = gbmGrid$n.minobsinnode[i],
-    best_iter = bestIter,
-    CV_Error = bestCvError
-  )
-})
-
-gbmResults <- do.call(rbind, gbmResults)
-
-best_model_gbm <- gbmResults[which.min(gbmResults$CV_Error), ]
-best_model_gbm
-
-#save(gbmModel, gbmResults, best_model_gbm, bestTrees, file = "gbm_all_objects.RData")
+  save(gbmCaretModel, gbmResults, best_model_gbm, gbmGrid, file = "gbm_caret_tuning_objects.RData")
+#}
 ```
 
 GBM BOOSTED TREE MODEL TUNING:
 
 ```{r}
+load("gbm_caret_tuning_objects.RData")
+
 ggplot(
   gbmResults,
   aes(
     x = n.trees,
-    y = CV_Error,
+    y = ROC,
     colour = factor(n.minobsinnode),
     group = factor(n.minobsinnode)
   )
@@ -393,7 +531,7 @@ ggplot(
   labs(
     title = "GBM Tuning Results",
     x = "Number of Trees",
-    y = "Cross-Validated Bernoulli Deviance",
+    y = "Mean CV AUROC",
     colour = "Min # of Obs in Node"
   ) +
   theme_minimal()
