@@ -477,9 +477,9 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 GBM BOOSTED TREE MODEL FITTING:
 
 ```{r}
-#if (file.exists("gbm_caret_tuning_objects.RData")) {
-#  load("gbm_caret_tuning_objects.RData")
-#} else {
+if (file.exists("gbmTuningObjects.RData")) {
+  load("gbmTuningObjects.RData")
+} else {
   set.seed(2026)
 
   gbmControl <- trainControl(
@@ -511,7 +511,7 @@ GBM BOOSTED TREE MODEL FITTING:
   best_model_gbm
   
   save(gbmCaretModel, best_model_gbm, gbmGrid, gbmControl, file = "gbmTuningObjects.RData")
-#}
+}
 ```
 
 GBM BOOSTED TREE MODEL TUNING:
@@ -575,67 +575,78 @@ Although the highest AUROC values were achieved in the more complex regions of t
 TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
 
 ```{r}
-set.seed(2026)
-
-# Fixed GBM hyperparameters
-gbmGridFixed <- expand.grid(
-  n.trees = 300,
-  interaction.depth = 8,
-  shrinkage = 0.075,
-  n.minobsinnode = 20
-)
-
-# 10-fold CV setup
-gbmControl <- trainControl(
-  method = "cv",
-  number = 10,
-  classProbs = TRUE,
-  summaryFunction = twoClassSummary,
-  savePredictions = "final",
-)
-
-# Fit GBM with fixed hyperparameters
-gbmCvModel <- train(
-  HighHost ~ .,
-  data = trainData,
-  method = "gbm",
-  trControl = gbmControl,
-  tuneGrid = gbmGridFixed,
-  metric = "ROC"
-)
-
-save(gbmGridFixed, gbmControl, gbmCvModel, file = "gbmCvModel2.RData")
-
-# Out-of-fold predicted probabilities from CV
-cvPred <- gbmCvModel$pred
-
-# If caret returns rows in a different order, keep only the chosen tuning row
-cvPred <- cvPred %>%
-  filter(
-    n.trees == 300,
-    interaction.depth == 8,
-    shrinkage == 0.075,
-    n.minobsinnode == 20
+if (file.exists("gbm_all_tuned_objects.RData")) {
+  load("gbm_all_tuned_objects.RData")
+} else {
+  set.seed(2026)
+  
+  # Fixed GBM hyperparameters
+  gbmGridFixed <- expand.grid(
+    n.trees = 300,
+    interaction.depth = 8,
+    shrinkage = 0.075,
+    n.minobsinnode = 20
   )
+  
+  # 10-fold CV setup
+  gbmControl <- trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary,
+    savePredictions = "final",
+  )
+  
+  # Fit GBM with fixed hyperparameters
+  gbmCvModel <- train(
+    HighHost ~ .,
+    data = trainData,
+    method = "gbm",
+    trControl = gbmControl,
+    tuneGrid = gbmGridFixed,
+    metric = "ROC"
+  )
+  
+  # Out-of-fold predicted probabilities from CV
+  cvPred <- gbmCvModel$pred
+  
+  # If caret returns rows in a different order, keep only the chosen tuning row
+  cvPred <- cvPred %>%
+    filter(
+      n.trees == 300,
+      interaction.depth == 8,
+      shrinkage == 0.075,
+      n.minobsinnode == 20
+    )
+  
+  # Class predictions using tau = 0.5
+  tau <- 0.5
+  cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
+  cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
+  cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
+  
+  # Confusion matrix
+  cm <- confusionMatrix(
+    data = cvPred$PredClass,
+    reference = cvPred$obs,
+    positive = "Yes"
+  )
+  
+  # AUROC from out-of-fold probabilities
+  aucValue <- as.numeric(
+    pROC::roc(response = cvPred$obs, predictor = cvPred$Yes, levels = c("No", "Yes"))$auc
+  )
+  
+  save(gbmGridFixed,
+         gbmControl,
+         gbmCvModel,
+         cvPred,
+         tau,
+         cm,
+         aucValue,
+         file = "gbm_all_tuned_objects.RData")
 
-# Class predictions using tau = 0.5
-tau <- 0.5
-cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
-cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
-cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
-
-# Confusion matrix
-cm <- confusionMatrix(
-  data = cvPred$PredClass,
-  reference = cvPred$obs,
-  positive = "Yes"
-)
-
-# AUROC from out-of-fold probabilities
-aucValue <- as.numeric(
-  pROC::roc(response = cvPred$obs, predictor = cvPred$Yes, levels = c("No", "Yes"))$auc
-)
-
+}
 # Metrics table in requested order
 gbmMetricTable <- data.frame(
   Accuracy = unname(cm$overall["Accuracy"]),
@@ -699,11 +710,10 @@ featureSets <- list(
 
 )
 
-#knnFile <- "knnModel.RData"
 
-#if (file.exists(knnFile)) {
-#  load(knnFile)
-#} else {
+if (file.exists("knn_all_objects.RData")) {
+  load("knn_all_objects.RData")
+} else {
   set.seed(2026)
 
   knnControl <- trainControl(
@@ -743,29 +753,27 @@ featureSets <- list(
     knnResults[[setName]] <- temp
   }
 
-knnResults <- do.call(rbind, knnResults)
-
-best_knn <- knnResults[which.max(knnResults$ROC), ]
-best_knn
-
-save(
-  knnFits,
-  knnResults,
-  best_knn,
-  featureSets,
-  knnGrid,
-  file = "knn_all_objects.RData"
-)
-
-#  save(knnModel, file = knnFile)
-#}
+  knnResults <- do.call(rbind, knnResults)
+  
+  best_knn <- knnResults[which.max(knnResults$ROC), ]
+  best_knn
+  
+  save(
+    knnFits,
+    knnResults,
+    best_knn,
+    featureSets,
+    knnGrid,
+    file = "knn_all_objects.RData"
+  )
+}
 ```
 
 K-NEAREST NEIGHBOURS INSPECTION:
 
 ```{r echo = FALSE}
 # K-NEAREST NEIGHBOURS TUNING:
-#load("knn_all_objects.RData")
+load("knn_all_objects.RData")
 
 ggplot(
   knnResults,
@@ -787,72 +795,88 @@ ggplot(
   theme_minimal()
 ```
 
-The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated ROC, the preferred specification uses the Host feature set. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that host-related variables carry the most predictive signal for this classifier.
+The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated AUROC. The preferred specification uses the feature set Subset2 which includes host_acceptance_rate, host_response_time, host_since_days and host_response_rate as features. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that these 4 host-related variables carry the most predictive signal for this classifier.
 
 Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.
 
 TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
 
 ```{r}
-set.seed(2026)
-
-selectedVars <- featureSets[["Subset2"]]
-
-# Keep only chosen feature set + response
-trainSubset <- trainData[, c(selectedVars, "HighHost")]
-
-# 10-fold CV setup, saving out-of-fold predictions
-knnControl <- trainControl(
-  method = "cv",
-  number = 10,
-  classProbs = TRUE,
-  summaryFunction = twoClassSummary,
-  savePredictions = "final"
-)
-
-# Fixed k = 3
-knnGridFixed <- expand.grid(k = 3)
-
-# Fit KNN with fixed feature set and fixed k
-knnCvModel <- train(
-  HighHost ~ .,
-  data = trainSubset,
-  method = "knn",
-  trControl = knnControl,
-  tuneGrid = knnGridFixed,
-  metric = "ROC",
-  preProcess = c("center", "scale")
-)
-
-# Out-of-fold predicted probabilities from CV
-cvPred <- knnCvModel$pred
-
-# Keep only the chosen tuning row
-cvPred <- cvPred %>%
-  filter(k == 3)
-
-# Class predictions using tau = 0.5
-tau <- 0.5
-cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
-cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
-cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
-
-# Confusion matrix
-cm <- confusionMatrix(
-  data = cvPred$PredClass,
-  reference = cvPred$obs,
-  positive = "Yes"
-)
-
-# AUROC from out-of-fold probabilities
-aucValue <- as.numeric(
-  pROC::roc(
-    response = cvPred$obs,
-    predictor = cvPred$Yes,
-    levels = c("No", "Yes"),
-    quiet = TRUE
-  )$auc
-)
+if (file.exists("knn_all_tuned_objects.RData")) {
+  load("knn_all_tuned_objects.RData")
+} else {
+  set.seed(2026)
+  
+  selectedVars <- featureSets[["Subset2"]]
+  
+  # Keep only chosen feature set + response
+  trainSubset <- trainData[, c(selectedVars, "HighHost")]
+  
+  # 10-fold CV setup, saving out-of-fold predictions
+  knnControl <- trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary,
+    savePredictions = "final"
+  )
+  
+  # Fixed k = 3
+  knnGridFixed <- expand.grid(k = 3)
+  
+  # Fit KNN with fixed feature set and fixed k
+  knnCvModel <- train(
+    HighHost ~ .,
+    data = trainSubset,
+    method = "knn",
+    trControl = knnControl,
+    tuneGrid = knnGridFixed,
+    metric = "ROC",
+    preProcess = c("center", "scale")
+  )
+  
+  # Out-of-fold predicted probabilities from CV
+  cvPred <- knnCvModel$pred
+  
+  # Keep only the chosen tuning row
+  cvPred <- cvPred %>%
+    filter(k == 3)
+  
+  # Class predictions using tau = 0.5
+  tau <- 0.5
+  cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
+  cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
+  cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
+  
+  # Confusion matrix
+  cm <- confusionMatrix(
+    data = cvPred$PredClass,
+    reference = cvPred$obs,
+    positive = "Yes"
+  )
+  
+  # AUROC from out-of-fold probabilities
+  aucValue <- as.numeric(
+    pROC::roc(
+      response = cvPred$obs,
+      predictor = cvPred$Yes,
+      levels = c("No", "Yes"),
+      quiet = TRUE
+    )$auc
+  )
+  
+  save(selectedVars,
+       trainSubset,
+       knnControl,
+       knnGridFixed,
+       knnCvModel,
+       cvPred,
+       tau,
+       cm,
+       aucValue,
+       file = "knn_all_tuned_objects.RData")
+  
+}
 
 # Metrics table in requested order
 knnMetricTable <- data.frame(
