@@ -1,5 +1,7 @@
 ---
-title: "BM"
+title: "Analytics - Assignment 1"
+subtitle: "**Cape Town Airbnb Listing Analysis**"
+authors: "Ben Mitchell & Ben Frost"
 format: html
 editor: visual
 ---
@@ -8,11 +10,12 @@ editor: visual
 # Required Package Installation:
 library(tidyverse)
 library(dplyr)
-library(glmnet)
+library(glmnetUtils)
 library(randomForest)
-library(pROC)
 library(gbm)
 library(caret)
+library(ggplot2)
+library(pROC)
 ```
 
 ```{r, echo = FALSE}
@@ -22,9 +25,9 @@ listings <- read.csv("listings.csv")
 
 ## Introduction:
 
-The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. The analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. \[Maybe Discuss Potential Impact/Implications Here?\] Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
+The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. Based on any given listing observation the analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
 
-Our analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then defined with the property number threshold being determined using the training data. Several classification methods are subsequently fitted and tuned, including elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
+The analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then derived and defined with the property number threshold being determined using the training data. Several classification models are subsequently fitted and tuned, the models types include elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
 
 Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.
 
@@ -43,7 +46,7 @@ testDataC  <- listings |> dplyr::slice(-trainIndex)
 
 This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
 
-There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
+There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
 
 ```{r echo = FALSE}
 hostUnique <- trainDataC |> 
@@ -85,7 +88,7 @@ listings <- listings |>
   rename(HighHost = host_listings_count)
 ```
 
-## Question 2:
+## Question 2a)
 
 ```{r echo = FALSE}
 # Training & Test Set Split With HighHost
@@ -147,7 +150,6 @@ DATA PRE-PROCESSING:
   
   testData <- testData |>
     select(-host_verifications)
-  
 
 # Transform Categorical Variables to be Factors:
   
@@ -199,7 +201,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = a,       # Tune Later
+    alpha = a,       
     nfolds = 10,
     type.measure = "auc",
     trace.it = FALSE
@@ -228,7 +230,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
   
   best_index_EN <- which.max(elasticNetResults$auc)
   best_alpha_EN <- elasticNetResults$alpha[best_index_EN]
-  best_auc <- elasticNetResults$auc[best_index_EN] #RENAME TO INCLUDE EN
+  best_auc <- elasticNetResults$auc[best_index_EN] 
   best_se <- elasticNetResults$se[best_index_EN]
   
   elasticNetModel <- glmnetUtils::cv.glmnet(
@@ -238,7 +240,8 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
     alpha = best_alpha_EN,       
     nfolds = 10,
     type.measure = "auc",
-    trace.it = TRUE
+    trace.it = TRUE,
+    keep = TRUE
   )
   
   
@@ -255,20 +258,25 @@ plot(elasticNetResults$alpha, elasticNetResults$auc,
      ylab = "AUROC",
      xlab = "Alpha Value")
 
-points(best_alpha_EN, best_auc, pch = 19)
+index_en <- which.max(elasticNetResults$auc)
 
-segments(x0 = min(elasticNetResults$alpha), y0 = best_auc,
-         x1 = best_alpha_EN,               y1 = best_auc,
-         lty = 2)
+points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19) 
 
+#veritcal line
+x_left <- par("usr")[1]
+segments(x0 = x_left, y0 = elasticNetResults$auc[index_en],
+         x1 = elasticNetResults$alpha[index_en],               y1 = elasticNetResults$auc[index_en],
+         lty = 3)
+
+#horizontal line
 y_bottom <- par("usr")[3]
-segments(x0 = best_alpha_EN, y0 = y_bottom,
-         x1 = best_alpha_EN, y1 = best_auc,
-         lty = 2)
+segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
+         x1 = elasticNetResults$alpha[index_en], y1 = elasticNetResults$auc[index_en],
+         lty = 3)
 
-text(x = best_alpha_EN,
+text(x = elasticNetResults$alpha[index_en],
      y = y_bottom,
-     labels = paste0("alpha = ", best_alpha_EN),
+     labels = paste0("alpha = ", elasticNetResults$alpha[index_en]),
      pos = 1,      
      xpd = NA)
 
@@ -322,7 +330,7 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
     mtry = mtry_grid,
     ntree = ntree_grid,
     nodesize = nodesize_grid
-    )      # REPLACE VALUES TO PROPERLY TUNE
+    )      
   
   
 rfResults <- lapply(1:nrow(rfGrid), function(i) {
@@ -367,7 +375,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   
 
  
-  best_model_rf <- rfResults[which.min(rfResults$mean_auc), ]
+  best_model_rf <- rfResults[which.max(rfResults$mean_auc), ]
   best_model_rf
   
   save(rfResults, file = rfResultsFile)
@@ -443,81 +451,145 @@ The final random forest model was then refitted on the full training set using t
 
 #maybe extend mtry beyond 12.
 
-CONVERTING HighHost TO BE NUMERIC:
+### GBM Boosted Tree Model:
+
+For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
+
+Hyperparameter selection was carried out using a grid-search approach on the training set only. For each candidate combination of tuning parameters, a GBM model was fitted with 10-fold cross-validation and model performance was assessed using the cross-validated Bernoulli deviance. The preferred hyperparameter combination was the one that achieved the lowest cross-validated error without risk of overfitting to the training data. After identifying the best combination of values for these hyperparameters the final GBM model has been refitted using these values.
+
+The hyperparameter search space was:
+
+n.trees ∈ {500, 750, 1000, 1250, 1500}
+
+interaction.depth ∈ {3, 5, 8, 10}
+
+shrinkage ∈ {0.01, 0.05, 0.1}
+
+n.minobsinnode ∈ {5, 10, 20}
+
+This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.
 
 ```{r}
-trainData$HighHost <- ifelse(trainData$HighHost == "Yes", 1, 0)
-testData$HighHost  <- ifelse(testData$HighHost == "Yes", 1, 0)
+# CONVERTING HighHost TO BE A FACTOR:
+trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
+testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
 
 GBM BOOSTED TREE MODEL FITTING:
 
 ```{r}
-#if (file.exists(gbmFile)) {
-#  load(gbmFile)
+#if (file.exists("gbm_caret_tuning_objects.RData")) {
+#  load("gbm_caret_tuning_objects.RData")
 #} else {
   set.seed(2026)
-  
+
+  gbmControl <- trainControl(
+  method = "cv",
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  verboseIter = TRUE
+  )
   
   gbmGrid <- expand.grid(
-    n.trees = c(1000),
-    interaction.depth = c(3),
-    shrinkage = c(0.01),
-    n.minobsinnode = c(10)
-  )    # TUNE LATER
-    
-gbm_results <- lapply(1:nrow(gbmGrid), function(j){  
-    gbmModel <- gbm(
-    formula = HighHost ~ . - HighHost,
+    n.trees = c(500, 750, 1000, 1250, 1500),
+    interaction.depth = c(3, 5, 8, 10),
+    shrinkage = c(0.01, 0.05, 0.1),
+    n.minobsinnode = c(5, 10, 20)
+  )
+  
+  gbmCaretModel <- train(
+    HighHost ~ .,
     data = trainData,
-    distribution = "bernoulli",
-    n.trees = gbmGrid$n.trees[j],
-    interaction.depth = gbmGrid$interaction.depth[j],
-    shrinkage = gbmGrid$shrinkage[j],
-    n.minobsinnode = gbmGrid$n.minobsinnode[j],
-    cv.folds = 5,
+    method = "gbm",
+    trControl = gbmControl,
+    tuneGrid = gbmGrid,
+    metric = "ROC",
     verbose = FALSE
   )
   
-  best_iteration_gbm <- gbm.perf(gbmModel, method = "cv", plot.it = FALSE)
-  best_cverror_gbm <- gbmModel$cv.error[best_iteration_gbm]
-  
-  data.frame(
-    n.trees = gbmGrid$n.trees[j],
-    interaction.depth = gbmGrid$interaction.depth[j],
-    shrinkage = gbmGrid$shrinkage[j],
-    n.minobsinnode = gbmGrid$n.minobsinnode[j],
-    cv_error = best_cverror_gbm
-  )
-})
-
-  gbm_results <- do.call(rbind, gbm_results)  
-
-  best_model_gbm <- gbm_results[which.min(gbm_results$cv_error), ]
+  best_model_gbm <- gbmCaretModel$bestTune
   best_model_gbm
   
-#  save(gbmModel, file = gbmFile)
+  save(gbmCaretModel, gbmResults, best_model_gbm, gbmGrid, file = "gbm_caret_tuning_objects.RData")
 #}
 ```
 
-GBM BOOSTED TREE MODEL INSPECTION:
+GBM BOOSTED TREE MODEL TUNING:
 
 ```{r}
-print(gbmModel)
-bestTrees <- gbm.perf(gbmModel, method = "cv")
-summary(gbmModel, n.trees = bestTrees)
+load("gbm_caret_tuning_objects.RData")
+
+ggplot(
+  gbmResults,
+  aes(
+    x = n.trees,
+    y = ROC,
+    colour = factor(n.minobsinnode),
+    group = factor(n.minobsinnode)
+  )
+) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_grid(shrinkage ~ interaction.depth, labeller = label_both) +
+  labs(
+    title = "GBM Tuning Results",
+    x = "Number of Trees",
+    y = "Mean CV AUROC",
+    colour = "Min # of Obs in Node"
+  ) +
+  theme_minimal()
+
 ```
 
-CONVERTING HighHost TO BE A FACTOR:
+### K-Nearest Neighbours Model:
 
-```{r, echo = FALSE}
+For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
+
+In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature's selection in it being dependent on its Relative Influence as depicted below;
+
+The feature search space consisted of the following candidate subsets:
+
+Subset1: host_acceptance_rate, host_response_time, host_since_days
+
+Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
+
+Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
+
+Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
+
+Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
+
+The neighbourhood size search space was:
+
+k ∈ {3,5,7,…,25}
+
+So the KNN tuning process searched jointly across 5 candidate feature sets and 12 candidate values of k.
+
+```{r echo = FALSE}
+# CONVERTING HighHost TO BE A FACTOR:
 trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
 
-K-NEAREST NEIGHBOURS FITTING:
+```{r echo = FALSE}
+# K-NEAREST NEIGHBOURS FITTING:
+# REMOVE FEATURES WITH ZERO VARIANCE
 
-```{r}
+featureSets <- list(
+  
+  Subset1 = c("host_acceptance_rate", "host_response_time", "host_since_days"),
+
+  Subset2 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate"),
+
+  Subset3 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights"),
+
+  Subset4 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude"),
+
+  Subset5 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude", "price")
+
+)
+
 #knnFile <- "knnModel.RData"
 
 #if (file.exists(knnFile)) {
@@ -525,29 +597,56 @@ K-NEAREST NEIGHBOURS FITTING:
 #} else {
   set.seed(2026)
 
-  trainDataKNN <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
-  select(-neighbourhood_ward)
-
-  testDataKNN <- testData |>       # USE LATER WHEN TESTING
-    select(-neighbourhood_ward)
-
   knnControl <- trainControl(
     method = "cv",
     number = 10,
     classProbs = TRUE,
-    summaryFunction = twoClassSummary
+    summaryFunction = twoClassSummary,
+    verboseIter = TRUE
   )
-knnGrid <- expand.grid(k = seq(3, 25, by = 2))
+  
+  knnGrid <- expand.grid(k = seq(1, 25, by = 2)) # Start at 3?
 
-  knnModel <- train(
-    HighHost ~ .,
-    data = trainDataKNN,
-    method = "knn",
-    trControl = knnControl,
-    tuneGrid = knnGrid,
-    metric = "ROC",
-    preProcess = c("center", "scale")
-  )
+  knnFits <- list()
+  knnResults <- list()
+
+  for (setName in names(featureSets)) 
+  {
+  
+    vars <- featureSets[[setName]]
+    
+    trainSubset <- trainData[ , c(vars, "HighHost")]
+    
+    knnFit <- train(
+      HighHost ~ .,
+      data = trainSubset,
+      method = "knn",
+      trControl = knnControl,
+      tuneGrid = knnGrid,
+      metric = "ROC",
+      preProcess = c("center", "scale")
+    )
+    
+    knnFits[[setName]] <- knnFit
+    
+    temp <- knnFit$results
+    temp$FeatureSet <- setName
+    knnResults[[setName]] <- temp
+  }
+
+knnResults <- do.call(rbind, knnResults)
+
+best_knn <- knnResults[which.max(knnResults$ROC), ]
+best_knn
+
+save(
+  knnFits,
+  knnResults,
+  best_knn,
+  featureSets,
+  knnGrid,
+  file = "knn_all_objects.RData"
+)
 
 #  save(knnModel, file = knnFile)
 #}
@@ -555,7 +654,91 @@ knnGrid <- expand.grid(k = seq(3, 25, by = 2))
 
 K-NEAREST NEIGHBOURS INSPECTION:
 
-```{r}
-print(knnModel)
-plot(knnModel)
+```{r echo = FALSE}
+# K-NEAREST NEIGHBOURS TUNING:
+load("knn_all_objects.RData")
+
+ggplot(
+  knnResults,
+  aes(
+    x = k,
+    y = ROC,
+    colour = FeatureSet,
+    group = FeatureSet
+  )
+) +
+  geom_line() +
+  geom_point(size = 2) +
+  labs(
+    title = "K-Nearest Neighbours Tuning Results",
+    x = "Number of Neighbours (k)",
+    y = "Mean CV ROC",
+    colour = "Feature Set"
+  ) +
+  theme_minimal()
+```
+
+The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated ROC, the preferred specification uses the Host feature set. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that host-related variables carry the most predictive signal for this classifier.
+
+Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities.
+
+## Question 2b)
+
+### Elastic-Net Logistic Regression
+
+```{r, echo = FALSE}
+
+en_outoffold_prob <- elasticNetModel$fit.preval[,index_en]
+en_outoffold_pred <- ifelse(outoffold_prob >= 0.5, 1, 0)
+
+y_true <- trainData$HighHost
+
+TP_EN <- sum(en_outoffold_pred == 1 & y_true == 1)
+TN_EN <- sum(en_outoffold_pred == 0 & y_true == 0)
+FP_EN <- sum(en_outoffold_pred == 1 & y_true == 0)
+FN_EN <- sum(en_outoffold_pred == 0 & y_true == 1)
+
+
+Accuracy_EN <- (TP_EN + TN_EN)/length(y_true)
+Precision_EN <- TP_EN/(TP_EN + FP_EN)
+Recall_EN <- TP_EN/(TP_EN + FN_EN)
+Specificity_EN <- TN_EN/(TN_EN + FP_EN)
+F1_Score_EN <- 2*Precision_EN*Recall_EN/(Precision_EN + Recall_EN) 
+
+roc_objective <- roc(y_true, outoffold_prob, quiet = TRUE)
+AUROC_EN <- as.numeric(auc(roc_objective))
+
+EN_Results <- data.frame(
+  Model = "Elastic Net",
+  Accuracy = Accuracy_EN,
+  F1_Score = F1_Score_EN,
+  Precision = Precision_EN,
+  Recall = Recall_EN,
+  Specificity = Specificity_EN,
+  AUROC = AUROC_EN
+)
+
+```
+
+### Random Forest
+
+```{r, echo = FALSE}
+
+rf_outoffold_prob <- numeric(nrow(trainData))
+
+foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+
+for (k in 1:10) {
+  
+  train_fold <- trainData[foldid != k,]
+  valid_fold <- trainData[foldid == k,]
+
+  rf_fit <- randomForest(
+    HighHost ~ .,
+    data = train_fold,
+    mtry = 
+  )  
+}
+
+
 ```

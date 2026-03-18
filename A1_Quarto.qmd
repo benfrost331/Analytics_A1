@@ -329,7 +329,7 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
     mtry = mtry_grid,
     ntree = ntree_grid,
     nodesize = nodesize_grid
-    )      # REPLACE VALUES TO PROPERLY TUNE
+    )      
   
   
 rfResults <- lapply(1:nrow(rfGrid), function(i) {
@@ -374,7 +374,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   
 
  
-  best_model_rf <- rfResults[which.min(rfResults$mean_auc), ]
+  best_model_rf <- rfResults[which.max(rfResults$mean_auc), ]
   best_model_rf
   
   save(rfResults, file = rfResultsFile)
