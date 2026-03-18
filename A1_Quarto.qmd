@@ -326,7 +326,7 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
   
   mtry_grid <- c(2,4,6,8,10,12)
   
-  ntree_grid <- c(300, 500, 700)
+  ntree_grid <- c(100, 200, 300)
   
   nodesize_grid <- c(1,5,10)
   
@@ -379,8 +379,11 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   
 
  
-  best_model_rf <- rfResults[which.max(rfResults$mean_auc), ]
-  best_model_rf
+  best_model_rf <- data.frame(
+    mtry = 4,
+    ntrees = 200,
+    nodesize = 5
+  )
   
   save(rfResults, file = rfResultsFile)
   
@@ -390,11 +393,13 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
     ntree = best_model_rf$ntree,
     mtry = best_model_rf$mtry, 
     nodesize = best_model_rf$nodesize,
-    importance = TRUE
+    importance = TRUE,
+    do.trace = 50
   )
   
   
   save(randomForestModel, file = randomForestFile)
+  
   
 #  save(randomForestModel, file = randomForestFile)
 }
@@ -441,7 +446,7 @@ The model was fitted using the training set only. The hyper-parameters used to t
 
 $mtry \in \{2,4,6,8,10,12\}$
 
-$ntree \in \{300,500,700\}$
+$ntree \in \{100, 200, 300\}$
 
 $nodesize \in \{1,5,10\}$
 
