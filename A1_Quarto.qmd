@@ -488,9 +488,9 @@ GBM BOOSTED TREE MODEL FITTING:
   )
   
   gbmGrid <- expand.grid(
-    n.trees = c(500, 750, 1000, 1250, 1500),
-    interaction.depth = c(3, 5, 8, 10),
-    shrinkage = c(0.01, 0.05, 0.1),
+    n.trees = c(100, 250, 400, 550, 750),
+    interaction.depth = c(8, 10),
+    shrinkage = c(0.05, 0.075, 0.1),
     n.minobsinnode = c(5, 10, 20)
   )
   
@@ -507,7 +507,7 @@ GBM BOOSTED TREE MODEL FITTING:
   best_model_gbm <- gbmCaretModel$bestTune
   best_model_gbm
   
-  save(gbmCaretModel, gbmResults, best_model_gbm, gbmGrid, file = "gbm_caret_tuning_objects.RData")
+  save(gbmCaretModel, best_model_gbm, gbmGrid, gbmControl, file = "gbm_caret_tuning_objects2.RData")
 #}
 ```
 
@@ -517,7 +517,7 @@ GBM BOOSTED TREE MODEL TUNING:
 load("gbm_caret_tuning_objects.RData")
 
 ggplot(
-  gbmResults,
+  gbmCaretModel,
   aes(
     x = n.trees,
     y = ROC,
@@ -668,7 +668,7 @@ ggplot(
   labs(
     title = "K-Nearest Neighbours Tuning Results",
     x = "Number of Neighbours (k)",
-    y = "Mean CV ROC",
+    y = "Mean AUROC",
     colour = "Feature Set"
   ) +
   theme_minimal()
