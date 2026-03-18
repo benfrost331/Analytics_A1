@@ -661,7 +661,6 @@ round(gbmMetricTable,4)
 
 ```
 
-
 ### K-Nearest Neighbours Model:
 
 For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
@@ -799,6 +798,115 @@ The KNN model was tuned over alternative feature subsets and values of k. Based 
 
 Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.
 
+## Question 2b)
+
+### Elastic-Net Logistic Regression
+
+```{r, echo = FALSE}
+
+en_outoffold_prob <- elasticNetModel$fit.preval[,index_en]
+en_outoffold_pred <- ifelse(en_outoffold_prob >= 0.5, 1, 0)
+
+y_true_en <- trainData$HighHost
+
+TP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 1)
+TN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 0)
+FP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 0)
+FN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 1)
+
+
+Accuracy_EN <- (TP_EN + TN_EN)/length(y_true_en)
+Precision_EN <- TP_EN/(TP_EN + FP_EN)
+Recall_EN <- TP_EN/(TP_EN + FN_EN)
+Specificity_EN <- TN_EN/(TN_EN + FP_EN)
+F1_Score_EN <- 2*Precision_EN*Recall_EN/(Precision_EN + Recall_EN) 
+
+roc_objective_en <- roc(y_true_en, en_outoffold_prob, quiet = TRUE)
+AUROC_EN <- as.numeric(auc(roc_objective_en))
+
+EN_Results <- data.frame(
+  Model = "Elastic Net",
+  Accuracy = Accuracy_EN,
+  F1_Score = F1_Score_EN,
+  Precision = Precision_EN,
+  Recall = Recall_EN,
+  Specificity = Specificity_EN,
+  AUROC = AUROC_EN
+)
+
+```
+
+### Random Forest
+
+```{r, echo = FALSE}
+
+randomForestMetricsFile <- "randomForestMetrics.RData"
+
+if (file.exists(randomForestMetricsFile)) {
+  load(randomForestMetricsFile)
+} else {
+
+
+
+rf_outoffold_prob <- numeric(nrow(trainData))
+
+foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+
+for (k in 1:10) {
+  
+  train_fold <- trainData[foldid != k,]
+  valid_fold <- trainData[foldid == k,]
+
+  rf_model <- randomForest(
+    HighHost ~ .,
+    data = train_fold,
+    mtry = rfResults$mtry[which.max(rfResults$mean_auc)],
+    ntree = rfResults$ntree[which.max(rfResults$mean_auc)],
+    nodesize = rfResults$nodesize[which.max(rfResults$mean_auc)]
+  )
+  
+  rf_outoffold_prob[foldid == k] <- predict(
+    rf_model, newdata = valid_fold, type = "prob")[,"Yes"]
+}
+
+
+rf_outoffold_pred <- ifelse(rf_outoffold_prob >= 0.5, 1, 0)
+y_true_rf <- ifelse(trainData$HighHost == "Yes", 1, 0)
+
+TP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 1)
+TN_RF <- sum(rf_outoffold_pred == 0 & y_true_rf == 0)
+FP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 0)
+FN_RF <- sum(rf_outoffold_pred == 0 & y_true_rf == 1)
+
+
+Accuracy_RF <- (TP_RF + TN_RF)/length(y_true_rf)
+Precision_RF <- TP_RF/(TP_RF + FP_RF)
+Recall_RF <- TP_RF/(TP_RF + FN_RF)
+Specificity_RF <- TN_RF/(TN_RF + FP_RF)
+F1_Score_RF <- 2*Precision_RF*Recall_RF/(Precision_RF + Recall_RF) 
+
+roc_objective_RF <- roc(y_true_rf, rf_outoffold_prob, quiet = TRUE)
+AUROC_RF <- as.numeric(auc(roc_objective_RF))
+
+RF_Results <- data.frame(
+  Model = "Random Forest",
+  Accuracy = Accuracy_RF,
+  F1_Score = F1_Score_RF,
+  Precision = Precision_RF,
+  Recall = Recall_RF,
+  Specificity = Specificity_RF,
+  AUROC = AUROC_RF
+)
+
+save(RF_Results, file = randomForestMetricsFile)
+
+}
+
+
+
+
+```
+
 TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
 
 ```{r}
@@ -890,4 +998,3 @@ knnMetricTable <- data.frame(
 
 round(knnMetricTable,4)
 ```
-
