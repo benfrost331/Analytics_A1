@@ -491,7 +491,7 @@ GBM BOOSTED TREE MODEL FITTING:
   )
   
   gbmGrid <- expand.grid(
-    n.trees = c(100, 250, 400, 550, 750),
+    n.trees = c(100, 200, 300, 400, 500),
     interaction.depth = c(8, 10),
     shrinkage = c(0.05, 0.075, 0.1),
     n.minobsinnode = c(5, 10, 20)
@@ -510,17 +510,31 @@ GBM BOOSTED TREE MODEL FITTING:
   best_model_gbm <- gbmCaretModel$bestTune
   best_model_gbm
   
-  save(gbmCaretModel, best_model_gbm, gbmGrid, gbmControl, file = "gbm_caret_tuning_objects2.RData")
+  save(gbmCaretModel, best_model_gbm, gbmGrid, gbmControl, file = "gbmTuningObjects.RData")
 #}
 ```
 
 GBM BOOSTED TREE MODEL TUNING:
 
 ```{r}
-load("gbm_caret_tuning_objects.RData")
+load("gbmTuningObjects.RData")
+
+chosenPoint <- data.frame(
+  n.trees = 300,
+  interaction.depth = 8,
+  shrinkage = 0.075,
+  n.minobsinnode = 20
+)
+
+# Get its AUROC value from the tuning results
+chosenPoint <- merge(
+  chosenPoint,
+  gbmCaretModel$results,
+  by = c("n.trees", "interaction.depth", "shrinkage", "n.minobsinnode")
+)
 
 ggplot(
-  gbmCaretModel,
+  gbmCaretModel$results,
   aes(
     x = n.trees,
     y = ROC,
@@ -530,16 +544,112 @@ ggplot(
 ) +
   geom_line() +
   geom_point(size = 2) +
+  geom_point(
+    data = chosenPoint,
+    aes(x = n.trees, y = ROC),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.5,
+    stroke = 1.5,
+    fill = "gold",
+    colour = "black"
+  ) +
   facet_grid(shrinkage ~ interaction.depth, labeller = label_both) +
+  scale_x_continuous(breaks = c(100, 200, 300, 400, 500)) +
   labs(
     title = "GBM Tuning Results",
     x = "Number of Trees",
     y = "Mean CV AUROC",
     colour = "Min # of Obs in Node"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 5.5),
+    axis.text.y = element_text(size = 7)
+  )
 
 ```
+
+Although the highest AUROC values were achieved in the more complex regions of the grid, the gains beyond moderate settings were very small. A tuning choice of n.trees = 1000, interaction.depth = 5, shrinkage = 0.05, and n.minobsinnode = 10 was therefore selected as a balanced specification, providing strong predictive performance while avoiding unnecessary additional model complexity.
+
+TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
+
+```{r}
+set.seed(2026)
+
+# Fixed GBM hyperparameters
+gbmGridFixed <- expand.grid(
+  n.trees = 300,
+  interaction.depth = 8,
+  shrinkage = 0.075,
+  n.minobsinnode = 20
+)
+
+# 10-fold CV setup
+gbmControl <- trainControl(
+  method = "cv",
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = "final",
+)
+
+# Fit GBM with fixed hyperparameters
+gbmCvModel <- train(
+  HighHost ~ .,
+  data = trainData,
+  method = "gbm",
+  trControl = gbmControl,
+  tuneGrid = gbmGridFixed,
+  metric = "ROC"
+)
+
+save(gbmGridFixed, gbmControl, gbmCvModel, file = "gbmCvModel2.RData")
+
+# Out-of-fold predicted probabilities from CV
+cvPred <- gbmCvModel$pred
+
+# If caret returns rows in a different order, keep only the chosen tuning row
+cvPred <- cvPred %>%
+  filter(
+    n.trees == 300,
+    interaction.depth == 8,
+    shrinkage == 0.075,
+    n.minobsinnode == 20
+  )
+
+# Class predictions using tau = 0.5
+tau <- 0.5
+cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
+cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
+cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
+
+# Confusion matrix
+cm <- confusionMatrix(
+  data = cvPred$PredClass,
+  reference = cvPred$obs,
+  positive = "Yes"
+)
+
+# AUROC from out-of-fold probabilities
+aucValue <- as.numeric(
+  pROC::roc(response = cvPred$obs, predictor = cvPred$Yes, levels = c("No", "Yes"))$auc
+)
+
+# Metrics table in requested order
+gbmMetricTable <- data.frame(
+  Accuracy = unname(cm$overall["Accuracy"]),
+  `F1 Score` = unname(cm$byClass["F1"]),
+  Precision = unname(cm$byClass["Precision"]),
+  Recall = unname(cm$byClass["Recall"]),
+  Specificity = unname(cm$byClass["Specificity"]),
+  AUROC = aucValue
+)
+
+round(gbmMetricTable,4)
+
+```
+
 
 ### K-Nearest Neighbours Model:
 
@@ -604,7 +714,7 @@ featureSets <- list(
     verboseIter = TRUE
   )
   
-  knnGrid <- expand.grid(k = seq(1, 25, by = 2)) # Start at 3?
+  knnGrid <- expand.grid(k = seq(1, 25, by = 1))
 
   knnFits <- list()
   knnResults <- list()
@@ -655,7 +765,7 @@ K-NEAREST NEIGHBOURS INSPECTION:
 
 ```{r echo = FALSE}
 # K-NEAREST NEIGHBOURS TUNING:
-load("knn_all_objects.RData")
+#load("knn_all_objects.RData")
 
 ggplot(
   knnResults,
@@ -679,4 +789,81 @@ ggplot(
 
 The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated ROC, the preferred specification uses the Host feature set. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that host-related variables carry the most predictive signal for this classifier.
 
-Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities.
+Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.
+
+TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
+
+```{r}
+set.seed(2026)
+
+selectedVars <- featureSets[["Subset2"]]
+
+# Keep only chosen feature set + response
+trainSubset <- trainData[, c(selectedVars, "HighHost")]
+
+# 10-fold CV setup, saving out-of-fold predictions
+knnControl <- trainControl(
+  method = "cv",
+  number = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  savePredictions = "final"
+)
+
+# Fixed k = 3
+knnGridFixed <- expand.grid(k = 3)
+
+# Fit KNN with fixed feature set and fixed k
+knnCvModel <- train(
+  HighHost ~ .,
+  data = trainSubset,
+  method = "knn",
+  trControl = knnControl,
+  tuneGrid = knnGridFixed,
+  metric = "ROC",
+  preProcess = c("center", "scale")
+)
+
+# Out-of-fold predicted probabilities from CV
+cvPred <- knnCvModel$pred
+
+# Keep only the chosen tuning row
+cvPred <- cvPred %>%
+  filter(k == 3)
+
+# Class predictions using tau = 0.5
+tau <- 0.5
+cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
+cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
+cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
+
+# Confusion matrix
+cm <- confusionMatrix(
+  data = cvPred$PredClass,
+  reference = cvPred$obs,
+  positive = "Yes"
+)
+
+# AUROC from out-of-fold probabilities
+aucValue <- as.numeric(
+  pROC::roc(
+    response = cvPred$obs,
+    predictor = cvPred$Yes,
+    levels = c("No", "Yes"),
+    quiet = TRUE
+  )$auc
+)
+
+# Metrics table in requested order
+knnMetricTable <- data.frame(
+  Accuracy = unname(cm$overall["Accuracy"]),
+  `F1 Score` = unname(cm$byClass["F1"]),
+  Precision = unname(cm$byClass["Precision"]),
+  Recall = unname(cm$byClass["Recall"]),
+  Specificity = unname(cm$byClass["Specificity"]),
+  AUROC = aucValue
+)
+
+round(knnMetricTable,4)
+```
+
