@@ -318,7 +318,7 @@ shrinkage ∈ {0.005, 0.01, 0.05, 0.1, 0.15}
 
 n.minobsinnode ∈ {5, 10, 20}
 
-This gives a total of 6 × 5 × 5 × 3 =  hyperparameter combinations evaluated.
+This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.
 
 ```{r}
 # CONVERTING HighHost TO BE NUMERIC:
@@ -335,9 +335,9 @@ GBM BOOSTED TREE MODEL FITTING:
   set.seed(2026)
 
   gbmGrid <- expand.grid(
-  n.trees = c(3000),#500, 1000, 1500, 2000, 2500),
-  interaction.depth = c(1, 3, 5, 8, 10),
-  shrinkage = c(0.005, 0.01, 0.05, 0.1, 0.15),
+  n.trees = c(500, 750, 1000, 1250, 1500),
+  interaction.depth = c(3, 5, 8, 10),
+  shrinkage = c(0.01, 0.05, 0.1),
   n.minobsinnode = c(5, 10, 20))
   
   gbmResults <- lapply(seq_len(nrow(gbmGrid)), function(i) {
@@ -402,31 +402,27 @@ ggplot(
 
 ### K-Nearest Neighbours Model:
 
-For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors were centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
+For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
 
-In addition to tuning the number of neighbours, the model was also tuned over alternative candidate feature subsets. This was done because KNN can be highly sensitive to irrelevant or weak predictors: including too many variables can distort the distance calculation and reduce classification performance. A range of feature sets was therefore considered, covering core listing characteristics, host-related variables, review-related variables, availability measures, location variables, and broader combined sets. The final KNN specification was chosen as the combination of feature subset and k with the highest mean cross-validated ROC.
+In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature's selection in it being dependent on its Relative Influence as depicted below;
 
 The feature search space consisted of the following candidate subsets:
 
-Basic: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights
+Subset1: host_acceptance_rate, host_response_time, host_since_days
 
-Host: host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost, has_email_verification, has_phone_verification, has_work_email_verification
+Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
 
-Review: number_of_reviews, reviews_per_month, review_scores_rating
+Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
 
-Availability: availability_30, availability_60, availability_90, availability_365
+Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
 
-Location: latitude, longitude, room_type, instant_bookable
-
-Combined 1: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights, host_since_days, host_response_rate, host_acceptance_rate, host_is_superhost, number_of_reviews, reviews_per_month, review_scores_rating, latitude, longitude, room_type, instant_bookable
-
-Combined 2: price, accommodates, bathrooms, bedrooms, beds, minimum_nights, maximum_nights, host_since_days, host_response_rate, host_acceptance_rate, host_response_time, host_is_superhost, has_email_verification, has_phone_verification, has_work_email_verification, number_of_reviews, reviews_per_month, review_scores_rating, availability_30, availability_60, availability_90, availability_365, latitude, longitude, room_type, instant_bookable
+Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
 
 The neighbourhood size search space was:
 
-k∈ {3,5,7,…,25}
+k ∈ {3,5,7,…,25}
 
-So the KNN tuning process searched jointly across 7 candidate feature sets and 12 candidate values of k.
+So the KNN tuning process searched jointly across 5 candidate feature sets and 12 candidate values of k.
 
 ```{r echo = FALSE}
 # CONVERTING HighHost TO BE A FACTOR:
@@ -439,44 +435,17 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 # REMOVE FEATURES WITH ZERO VARIANCE
 
 featureSets <- list(
-  Basic = c(
-    "price", "accommodates", "bathrooms", "bedrooms", "beds",
-    "minimum_nights", "maximum_nights"
-  ),
-  Host = c(
-    "host_since_days", "host_response_rate", "host_acceptance_rate",
-    "host_response_time", "host_is_superhost",
-    "has_email_verification", "has_phone_verification",
-    "has_work_email_verification"
-  ),
-  Review = c(
-    "number_of_reviews", "reviews_per_month", "review_scores_rating"
-  ),
-  Availability = c(
-    "availability_30", "availability_60", "availability_90", "availability_365"
-  ),
-  Location = c(
-    "latitude", "longitude", "room_type", "instant_bookable"
-  ),
-  Combined_1 = c(
-    "price", "accommodates", "bathrooms", "bedrooms", "beds",
-    "minimum_nights", "maximum_nights",
-    "host_since_days", "host_response_rate", "host_acceptance_rate",
-    "host_is_superhost",
-    "number_of_reviews", "reviews_per_month", "review_scores_rating",
-    "latitude", "longitude", "room_type", "instant_bookable"
-  ),
-  Combined_2 = c(
-    "price", "accommodates", "bathrooms", "bedrooms", "beds",
-    "minimum_nights", "maximum_nights",
-    "host_since_days", "host_response_rate", "host_acceptance_rate",
-    "host_response_time", "host_is_superhost",
-    "has_email_verification", "has_phone_verification",
-    "has_work_email_verification",
-    "number_of_reviews", "reviews_per_month", "review_scores_rating",
-    "availability_30", "availability_60", "availability_90", "availability_365",
-    "latitude", "longitude", "room_type", "instant_bookable"
-  )
+  
+  Subset1 = c("host_acceptance_rate", "host_response_time", "host_since_days"),
+
+  Subset2 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate"),
+
+  Subset3 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights"),
+
+  Subset4 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude"),
+
+  Subset5 = c("host_acceptance_rate", "host_response_time", "host_since_days", "host_response_rate", "minimum_nights", "latitude", "price")
+
 )
 
 #knnFile <- "knnModel.RData"
@@ -494,7 +463,7 @@ featureSets <- list(
     verboseIter = TRUE
   )
   
-  knnGrid <- expand.grid(k = seq(1, 25, by = 2))
+  knnGrid <- expand.grid(k = seq(1, 25, by = 2)) # Start at 3?
 
   knnFits <- list()
   knnResults <- list()
