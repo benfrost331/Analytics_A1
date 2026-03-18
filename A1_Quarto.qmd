@@ -318,7 +318,7 @@ shrinkage ∈ {0.005, 0.01, 0.05, 0.1, 0.15}
 
 n.minobsinnode ∈ {5, 10, 20}
 
-This gives a total of 6 × 5 × 5 × 3 =  hyperparameter combinations evaluated.
+This gives a total of 6 × 5 × 5 × 3 = hyperparameter combinations evaluated.
 
 ```{r}
 # CONVERTING HighHost TO BE NUMERIC:

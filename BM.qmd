@@ -10,6 +10,7 @@ library(tidyverse)
 library(dplyr)
 library(glmnet)
 library(randomForest)
+library(pROC)
 library(gbm)
 library(caret)
 ```
@@ -100,13 +101,13 @@ testData  <- listings |> dplyr::slice(-trainIndex)
 DATA PRE-PROCESSING:
 
 ```{r echo = FALSE}
-# Remove id (Useless) & host_id (Target Leakage Prevention):
+# Remove id (Useless), host_id (Target Leakage Prevention) neighbourhood_ward (Collinear With Longitude & Latitude and Problematic):
 
   trainData <- trainData |>
-    select(-id, -host_id)
+    select(-id, -host_id, -neighbourhood_ward)
   
   testData <- testData |>
-    select(-id, -host_id)
+    select(-id, -host_id, -neighbourhood_ward)
 
 # Convert host_since to a Usable Numeric Predictor:
 
@@ -146,10 +147,11 @@ DATA PRE-PROCESSING:
   
   testData <- testData |>
     select(-host_verifications)
+  
 
 # Transform Categorical Variables to be Factors:
   
-  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THHE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
+  # *MIGHT NEED TO ENFORCE OBSERVATIONS CONTAINING NA DROPPING IN THE CASE THE MODEL ENCOUNTERS A FACTOR LEVEL IT HAS NEVER SEEN BEFORE WHEN BEING TESTED ON THE "UNSEEN" TEST DATA*
   
   # host_response_time:
   trainData$host_response_time <- as.factor(trainData$host_response_time)
@@ -158,10 +160,6 @@ DATA PRE-PROCESSING:
   # host_is_superhost
   trainData$host_is_superhost <- as.factor(trainData$host_is_superhost)
   testData$host_is_superhost  <- factor(testData$host_is_superhost, levels = levels(trainData$host_is_superhost))
-  
-  # neighbourhood_ward
-  trainData$neighbourhood_ward <- as.factor(trainData$neighbourhood_ward)
-  testData$neighbourhood_ward  <- factor(testData$neighbourhood_ward, levels = levels(trainData$neighbourhood_ward))
   
   # room_type
   trainData$room_type <- as.factor(trainData$room_type)
@@ -184,45 +182,111 @@ DATA PRE-PROCESSING:
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION FITTING:
 
 ```{r, echo = FALSE}
-elasticNetFile <- "elasticNetModel.RData"
+  elasticNetResultsFile <- "elasticNetResults.RData"
+  elasticNetFile <- "elasticNetModel.RData"
 
-#if (file.exists(elasticNetFile))
-#{
-#  load(elasticNetFile)
-#} else 
-#{
+if (file.exists(elasticNetFile) && file.exists(elasticNetResultsFile))
+{
+  load(elasticNetFile)
+  load(elasticNetResultsFile)
+} else 
+{
   set.seed(2026)
-alphaGrid <- seq(0,1, by = 0.5)
+alphaGrid <- seq(0,1, by = 0.01)
 
 elasticNetResults <- lapply(alphaGrid, function(a) {  
-  elasticNetModel <- glmnetUtils::cv.glmnet(
+  elasticNetFits <- glmnetUtils::cv.glmnet(
     HighHost ~ .,
     data = trainData,
     family = "binomial",
     alpha = a,       # Tune Later
     nfolds = 10,
-    type.measure = "auc"
+    type.measure = "auc",
+    trace.it = FALSE
   )
-  index <- which.min(abs(elasticNetModel$lambda - elasticNetModel$lambda.min)) 
+  index <- which.min(abs(elasticNetFits$lambda - elasticNetFits$lambda.min))
   
-  data.frame(alpha = a,
-             lambda_min = elasticNetModel$lambda.min,
-             auc = elasticNetModel$cvm[index])
+  coeficients <- coef(elasticNetFits, s = "lambda.min")
+  n_nonzero <- sum(as.vector(coeficients)[-1] != 0) 
+  
+  list(
+    fit = elasticNetFits,
+    summary = data.frame(alpha = a,
+      lambda_min = elasticNetFits$lambda.min,
+      auc = elasticNetFits$cvm[index]),
+      se = elasticNetFits$cvsd[index],
+      lambda_min = elasticNetFits$lambda.min,
+      lambda_1se = elasticNetFits$lambda.1se,
+      n_nonzero = n_nonzero
+  )
 })
-  elasticNetResults <- do.call(rbind, elasticNetResults)
-  best_model_EN <- elasticNetResults[which.max(elasticNetResults$auc),]
-  best_model_EN
+  
+
+  elasticNetResults <- do.call(rbind, 
+    lapply(elasticNetResults, function(x) x$summary)
+    )
+  
+  best_index_EN <- which.max(elasticNetResults$auc)
+  best_alpha_EN <- elasticNetResults$alpha[best_index_EN]
+  best_auc <- elasticNetResults$auc[best_index_EN] #RENAME TO INCLUDE EN
+  best_se <- elasticNetResults$se[best_index_EN]
+  
+  elasticNetModel <- glmnetUtils::cv.glmnet(
+    HighHost ~ .,
+    data = trainData,
+    family = "binomial",
+    alpha = best_alpha_EN,       
+    nfolds = 10,
+    type.measure = "auc",
+    trace.it = TRUE
+  )
+  
+  
+  save(elasticNetResults, file = elasticNetResultsFile)
   save(elasticNetModel, file = elasticNetFile) # Change to save the best model (may need to rerun the best model)
-#}
+}
 ```
 
 REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
 
 ```{r, echo = FALSE}
+plot(elasticNetResults$alpha, elasticNetResults$auc,
+     type = "l",
+     ylab = "AUROC",
+     xlab = "Alpha Value")
+
+points(best_alpha_EN, best_auc, pch = 19)
+
+segments(x0 = min(elasticNetResults$alpha), y0 = best_auc,
+         x1 = best_alpha_EN,               y1 = best_auc,
+         lty = 2)
+
+y_bottom <- par("usr")[3]
+segments(x0 = best_alpha_EN, y0 = y_bottom,
+         x1 = best_alpha_EN, y1 = best_auc,
+         lty = 2)
+
+text(x = best_alpha_EN,
+     y = y_bottom,
+     labels = paste0("alpha = ", best_alpha_EN),
+     pos = 1,      
+     xpd = NA)
+
+
 print(elasticNetModel)
 coef(elasticNetModel, s = "lambda.min")
-plot(elasticNetModel)
+plot(elasticNetModel) #check werid plateau at 1 factor
 ```
+
+The Regularised Elastic-Net Regression Model was used as a binary classification model for predicting whether a listing is a high host or not. Logistic regression was appropriate here because the response variable is binary, and it models the probability that an observation belongs to a class using the log-odds function. With a large set of predictors, ordinary logistic regression may over-fit. This is addressed by regularization, through the elastic-net penalty.
+
+The elastic-net penalty combines the L1 (lasso) and L2 (ridge) penalties. The lasso component performs variable selection, shrinking some coefficients exactly to zero, while the ridge component shrinks coefficients to zero without necessarily removing them. Elastic-net is thus a useful combination of lasso and ridge regression.
+
+We used the training set to fit our model, where we tuned the model to the two hyper-parameters: α, which controls the balance between ridge and lasso penalization, and λ, which controls the level of the penalty.
+
+To tune the model we searched over the range of α, 0 to 1, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).
+
+The optimal alpha value that we chose was α = 0.23, and the corresponding lambda value of λ = 0.0001935441, and we then refitted the final elastic-net model on the training set with this chosen α value and its corresponding optimal λ.
 
 CONVERTING HighHost TO BE A FACTOR:
 
@@ -234,60 +298,150 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 RANDOM FOREST FITTING:
 
 ```{r, echo = FALSE}
-#if (file.exists(randomForestFile)) {
-#  load(randomForestFile)
-#} else {
-  
-  trainDataRF <- trainData |>     # EXPLAIN IN WRITE UP THAT LONG & LAT ARE COLLINEAR WITH WARD SO FINE TO DROP
-  select(-neighbourhood_ward)
 
-  testDataRF <- testData |>       # USE LATER WHEN TESTING
-    select(-neighbourhood_ward)
+  rfResultsFile <- "rfResults.RData"
+  randomForestFile <- "randomForestModel.RData"
+
+if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
+  load(randomForestFile)
+} else {
 
   set.seed(2026)
   
-  p <- ncol(trainDataRF) - 1
+  foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+  
+  p <- ncol(trainData) - 1
+  
+  mtry_grid <- c(2,4,6,8,10,12)
+  
+  ntree_grid <- c(300, 500, 700)
+  
+  nodesize_grid <- c(1,5,10)
   
   rfGrid <- expand.grid(
-    mtry = c(floor(sqrt(p))),   #, floor(p/2), p
-    ntree = c(50),     #, 500, 1000
-    nodesize = c(1)    #, 5, 10
+    mtry = mtry_grid,
+    ntree = ntree_grid,
+    nodesize = nodesize_grid
     )      # REPLACE VALUES TO PROPERLY TUNE
   
   
 rfResults <- lapply(1:nrow(rfGrid), function(i) {
+  this_mtry     <- rfGrid$mtry[i]
+  this_ntree    <- rfGrid$ntree[i]
+  this_nodesize <- rfGrid$nodesize[i]
+  
+  fold_auc <- numeric(10)
+  
+  for (k in 1:10) {
+    
+    train_fold <- trainData[foldid != k, ]
+    valid_fold <- trainData[foldid == k, ]
+    
+    rf_fit <- randomForest(
+      HighHost ~ .,
+      data = train_fold,
+      mtry = this_mtry,
+      ntree = this_ntree,
+      nodesize = this_nodesize
+    )
+    
+    prob_yes <- predict(rf_fit, newdata = valid_fold, type = "prob")[, "Yes"]
+    
+    fold_auc[k] <- as.numeric(
+      auc(
+        roc(response = valid_fold$HighHost,
+            predictor = prob_yes,
+            levels = c("No", "Yes"),
+            direction = "<")))
+  }
+  
+  data.frame(
+    mtry = this_mtry,
+    ntree = this_ntree,
+    nodesize = this_nodesize,
+    mean_auc = mean(fold_auc),
+    sd_auc = sd(fold_auc))
+})
+  
+  rfResults <- do.call(rbind, rfResults)
+  
 
+ 
+  best_model_rf <- rfResults[which.min(rfResults$mean_auc), ]
+  best_model_rf
+  
+  save(rfResults, file = rfResultsFile)
+  
   randomForestModel <- randomForest(
     HighHost ~ .,
-    data = trainDataRF,
-    ntree = rfGrid$ntree[i],
-    mtry = rfGrid$mtry[i], #ncol(trainDataRF) - 1
-    nodesize = rfGrid$nodesize[i],
+    data = trainData,
+    ntree = best_model_rf$ntree,
+    mtry = best_model_rf$mtry, 
+    nodesize = best_model_rf$nodesize,
     importance = TRUE
   )
-  data.frame(
-    mtry = rfGrid$mtry[i],
-    ntree = rfGrid$ntree[i],
-    nodesize = rfGrid$nodesize[i],
-    OOB_Error = randomForestModel$err.rate[nrow(randomForestModel$err.rate), "OOB"]
-  )
-})
-  rfResults <- do.call(rbind, rfResults)
-  best_model_rf <- rfResults[which.min(rfResults$OOB_Error), ]
-  best_model_rf
+  
+  
+  save(randomForestModel, file = randomForestFile)
+  
 #  save(randomForestModel, file = randomForestFile)
-#}
+}
 ```
 
 RANDOM FOREST FITTING INSPECTION:
 
 ```{r, echo = FALSE}
+
+library(ggplot2)
+ggplot(rfResults, aes(x = ntree, y = mean_auc,
+                      colour = factor(nodesize),
+                      group = factor(nodesize))) +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(~ mtry, scales = "fixed") +
+  labs(
+    title = "Random forest tuning results",
+    x = "Number of trees",
+    y = "AUROC",
+    colour = "nodesize"
+  ) +
+  theme_minimal()
+
+
 randomForestModel
 plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
 #print(randomForestModel)
 #importance(randomForestModel)
 #varImpPlot(randomForestModel)
 ```
+
+We used a random forest classifier to predict the binary response variable, HighHost. Random Forests are a tree-based method that build a large number of classification trees on bootstrap samples of the training data and then combine their predictions. This approach is useful because it can capture non-linear relationships and interactions between predictors. It is also generally less prone to over fitting than a single decision tree.
+
+At each split in the tree, only a random subset of predictors are considered. This introduces randomness and reduces correlation between trees, which improves the overall model. Since the outcome is binary, the response variable was treated as a factor so that the model was fitted as a classification forest.
+
+The model was fitted using the training set only. The hyper-parameters used to tune were:
+
+-   mtry = the number of predictors randomly chosen at each split
+
+-   ntree = the total number of trees grown in the forest
+
+-   nodesize = the minimum final node size, which dictates how deep the trees grow
+
+$mtry \in \{2,4,6,8,10,12\}$
+
+$ntree \in \{300,500,700\}$
+
+$nodesize \in \{1,5,10\}$
+
+This gave a total of $6 \times 3 \times 3 = 54$ different models. The mtry values were chosen to cover values around the default value of approximately $\sqrt{p}$, where $p$ is the number of predictors. The ntree values were chosen to compare a relatively small, moderate and large forest, and the nodesize values were chosen to allow a comparison between shallower, more moderate and deeper trees.
+
+Hyper-parameter tuning was performed on 10-fold cross-validation on the training set. For each different combination of hyper-parameters, a new model was trained on 9 folds and the AUROC was calculated on the remaining fold. The mean AUROC across the 10-folds was then used to tune the model. The selected random forest hyper-parameters were then chosen to be: mtry = 12, ntree = 700 and nodesize = 1.
+
+We can see that the optimal number of trees was on the upper boundary of our tuning Grid, but looking at our plots, we can see that the AUROC with respect to ntree is close to plateaued, so by extending our grid we would not gain much more accuracy. The same can be said for the mtry, as once mtry gets to 8, 10 and 12, the increases in AUROC were small.
+
+The final random forest model was then refitted on the full training set using these selected hyper-parameters.
+
+#maybe extend mtry beyond 12.
 
 CONVERTING HighHost TO BE NUMERIC:
 
