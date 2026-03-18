@@ -689,24 +689,24 @@ Despite the highest mean cross-validated ROC being achieved by the Host feature 
 ```{r, echo = FALSE}
 
 en_outoffold_prob <- elasticNetModel$fit.preval[,index_en]
-en_outoffold_pred <- ifelse(outoffold_prob >= 0.5, 1, 0)
+en_outoffold_pred <- ifelse(en_outoffold_prob >= 0.5, 1, 0)
 
-y_true <- trainData$HighHost
+y_true_en <- trainData$HighHost
 
-TP_EN <- sum(en_outoffold_pred == 1 & y_true == 1)
-TN_EN <- sum(en_outoffold_pred == 0 & y_true == 0)
-FP_EN <- sum(en_outoffold_pred == 1 & y_true == 0)
-FN_EN <- sum(en_outoffold_pred == 0 & y_true == 1)
+TP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 1)
+TN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 0)
+FP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 0)
+FN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 1)
 
 
-Accuracy_EN <- (TP_EN + TN_EN)/length(y_true)
+Accuracy_EN <- (TP_EN + TN_EN)/length(y_true_en)
 Precision_EN <- TP_EN/(TP_EN + FP_EN)
 Recall_EN <- TP_EN/(TP_EN + FN_EN)
 Specificity_EN <- TN_EN/(TN_EN + FP_EN)
 F1_Score_EN <- 2*Precision_EN*Recall_EN/(Precision_EN + Recall_EN) 
 
-roc_objective <- roc(y_true, outoffold_prob, quiet = TRUE)
-AUROC_EN <- as.numeric(auc(roc_objective))
+roc_objective_en <- roc(y_true_en, en_outoffold_prob, quiet = TRUE)
+AUROC_EN <- as.numeric(auc(roc_objective_en))
 
 EN_Results <- data.frame(
   Model = "Elastic Net",
@@ -724,6 +724,14 @@ EN_Results <- data.frame(
 
 ```{r, echo = FALSE}
 
+randomForestMetricsFile <- "randomForestMetrics.RData"
+
+if (file.exists(randomForestMetricsFile)) {
+  load(randomForestMetricsFile)
+} else {
+
+
+
 rf_outoffold_prob <- numeric(nrow(trainData))
 
 foldid <- sample(rep(1:10, length.out = nrow(trainData)))
@@ -733,12 +741,52 @@ for (k in 1:10) {
   train_fold <- trainData[foldid != k,]
   valid_fold <- trainData[foldid == k,]
 
-  rf_fit <- randomForest(
+  rf_model <- randomForest(
     HighHost ~ .,
     data = train_fold,
-    mtry = 
-  )  
+    mtry = rfResults$mtry[which.max(rfResults$mean_auc)],
+    ntree = rfResults$ntree[which.max(rfResults$mean_auc)],
+    nodesize = rfResults$nodesize[which.max(rfResults$mean_auc)]
+  )
+  
+  rf_outoffold_prob[foldid == k] <- predict(
+    rf_model, newdata = valid_fold, type = "prob")[,"Yes"]
 }
+
+
+rf_outoffold_pred <- ifelse(rf_outoffold_prob >= 0.5, 1, 0)
+y_true_rf <- ifelse(trainData$HighHost == "Yes", 1, 0)
+
+TP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 1)
+TN_RF <- sum(rf_outoffold_pred == 0 & y_true_rf == 0)
+FP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 0)
+FN_RF <- sum(rf_outoffold_pred == 0 & y_true_rf == 1)
+
+
+Accuracy_RF <- (TP_RF + TN_RF)/length(y_true_rf)
+Precision_RF <- TP_RF/(TP_RF + FP_RF)
+Recall_RF <- TP_RF/(TP_RF + FN_RF)
+Specificity_RF <- TN_RF/(TN_RF + FP_RF)
+F1_Score_RF <- 2*Precision_RF*Recall_RF/(Precision_RF + Recall_RF) 
+
+roc_objective_RF <- roc(y_true_rf, rf_outoffold_prob, quiet = TRUE)
+AUROC_RF <- as.numeric(auc(roc_objective_RF))
+
+RF_Results <- data.frame(
+  Model = "Random Forest",
+  Accuracy = Accuracy_RF,
+  F1_Score = F1_Score_RF,
+  Precision = Precision_RF,
+  Recall = Recall_RF,
+  Specificity = Specificity_RF,
+  AUROC = AUROC_RF
+)
+
+save(RF_Results, file = randomForestMetricsFile)
+
+}
+
+
 
 
 ```
