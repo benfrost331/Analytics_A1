@@ -201,7 +201,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
     HighHost ~ .,
     data = trainData,
     family = "binomial",
-    alpha = a,       # Tune Later
+    alpha = a,       
     nfolds = 10,
     type.measure = "auc",
     trace.it = FALSE
@@ -230,7 +230,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
   
   best_index_EN <- which.max(elasticNetResults$auc)
   best_alpha_EN <- elasticNetResults$alpha[best_index_EN]
-  best_auc <- elasticNetResults$auc[best_index_EN] #RENAME TO INCLUDE EN
+  best_auc <- elasticNetResults$auc[best_index_EN] 
   best_se <- elasticNetResults$se[best_index_EN]
   
   elasticNetModel <- glmnetUtils::cv.glmnet(
@@ -261,14 +261,17 @@ index_en <- which.max(elasticNetResults$auc)
 
 points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19) 
 
-segments(x0 = min(elasticNetResults$alpha[index_en]), y0 = elasticNetResults$alpha[index_en],
+#veritcal line
+x_left <- par("usr")[1]
+segments(x0 = x_left, y0 = elasticNetResults$auc[index_en],
          x1 = elasticNetResults$alpha[index_en],               y1 = elasticNetResults$auc[index_en],
-         lty = 2)
+         lty = 3)
 
+#horizontal line
 y_bottom <- par("usr")[3]
 segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
          x1 = elasticNetResults$alpha[index_en], y1 = elasticNetResults$auc[index_en],
-         lty = 2)
+         lty = 3)
 
 text(x = elasticNetResults$alpha[index_en],
      y = y_bottom,
@@ -288,7 +291,7 @@ The elastic-net penalty combines the L1 (lasso) and L2 (ridge) penalties. The la
 
 We used the training set to fit our model, where we tuned the model to the two hyper-parameters: α, which controls the balance between ridge and lasso penalization, and λ, which controls the level of the penalty.
 
-To tune the model we searched over the range of α, 0 to 1, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).
+To tune the model we searched over the range of $α \in (0,1)$, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).
 
 The optimal alpha value that we chose was α = 0.23, and the corresponding lambda value of λ = 0.0001935441, and we then refitted the final elastic-net model on the training set with this chosen α value and its corresponding optimal λ.
 
