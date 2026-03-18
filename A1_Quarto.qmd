@@ -44,6 +44,8 @@ testDataC  <- listings |> dplyr::slice(-trainIndex)
 
 ## Question 1:
 
+### Target Variable Creation:
+
 This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
 
 There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
@@ -90,6 +92,8 @@ listings <- listings |>
 
 ## Question 2:
 
+### a)
+
 ```{r echo = FALSE}
 # Training & Test Set Split With HighHost
 set.seed(2026)
@@ -101,7 +105,7 @@ trainData <- listings |> dplyr::slice(trainIndex)
 testData  <- listings |> dplyr::slice(-trainIndex)
 ```
 
-DATA PRE-PROCESSING:
+#### Data Pre-Processing:
 
 ```{r echo = FALSE}
 # Remove id (Useless), host_id (Target Leakage Prevention) neighbourhood_ward (Collinear With Longitude & Latitude and Problematic):
@@ -181,7 +185,7 @@ DATA PRE-PROCESSING:
   # ENSURE DONE BEFORE MODEL CREATION
 ```
 
-REGULARISED ELASTIC-NET LOGISTIC REGRESSION FITTING:
+#### Regularised Elastic-Net Logistic Regression:
 
 ```{r, echo = FALSE}
   elasticNetResultsFile <- "elasticNetResults.RData"
@@ -302,7 +306,7 @@ trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("N
 testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
 
-RANDOM FOREST FITTING:
+#### Random Forest:
 
 ```{r, echo = FALSE}
 
@@ -449,7 +453,7 @@ We can see that the optimal number of trees was on the upper boundary of our tun
 
 The final random forest model was then refitted on the full training set using these selected hyper-parameters.
 
-### GBM Boosted Tree Model:
+#### GBM Boosted Tree Model:
 
 For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
 
@@ -565,95 +569,7 @@ ggplot(
 
 Although the highest AUROC values were achieved in the more complex regions of the grid, the gains beyond moderate settings were very small. A tuning choice of n.trees = 1000, interaction.depth = 5, shrinkage = 0.05, and n.minobsinnode = 10 was therefore selected as a balanced specification, providing strong predictive performance while avoiding unnecessary additional model complexity.
 
-TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
-
-```{r}
-if (file.exists("gbm_all_tuned_objects.RData")) {
-  load("gbm_all_tuned_objects.RData")
-} else {
-  set.seed(2026)
-  
-  # Fixed GBM hyperparameters
-  gbmGridFixed <- expand.grid(
-    n.trees = 300,
-    interaction.depth = 8,
-    shrinkage = 0.075,
-    n.minobsinnode = 20
-  )
-  
-  # 10-fold CV setup
-  gbmControl <- trainControl(
-    method = "cv",
-    number = 10,
-    classProbs = TRUE,
-    summaryFunction = twoClassSummary,
-    savePredictions = "final",
-  )
-  
-  # Fit GBM with fixed hyperparameters
-  gbmCvModel <- train(
-    HighHost ~ .,
-    data = trainData,
-    method = "gbm",
-    trControl = gbmControl,
-    tuneGrid = gbmGridFixed,
-    metric = "ROC"
-  )
-  
-  # Out-of-fold predicted probabilities from CV
-  cvPred <- gbmCvModel$pred
-  
-  # If caret returns rows in a different order, keep only the chosen tuning row
-  cvPred <- cvPred %>%
-    filter(
-      n.trees == 300,
-      interaction.depth == 8,
-      shrinkage == 0.075,
-      n.minobsinnode == 20
-    )
-  
-  # Class predictions using tau = 0.5
-  tau <- 0.5
-  cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
-  cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
-  cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
-  
-  # Confusion matrix
-  cm <- confusionMatrix(
-    data = cvPred$PredClass,
-    reference = cvPred$obs,
-    positive = "Yes"
-  )
-  
-  # AUROC from out-of-fold probabilities
-  aucValue <- as.numeric(
-    pROC::roc(response = cvPred$obs, predictor = cvPred$Yes, levels = c("No", "Yes"))$auc
-  )
-  
-  save(gbmGridFixed,
-         gbmControl,
-         gbmCvModel,
-         cvPred,
-         tau,
-         cm,
-         aucValue,
-         file = "gbm_all_tuned_objects.RData")
-
-}
-# Metrics table in requested order
-gbmMetricTable <- data.frame(
-  Model = "GBM Boosted Tree",
-  Accuracy = unname(cm$overall["Accuracy"]),
-  F1_Score = unname(cm$byClass["F1"]),
-  Precision = unname(cm$byClass["Precision"]),
-  Recall = unname(cm$byClass["Recall"]),
-  Specificity = unname(cm$byClass["Specificity"]),
-  AUROC = aucValue
-)
-
-```
-
-### K-Nearest Neighbours Model:
+#### K-Nearest Neighbours Model:
 
 For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
 
@@ -799,9 +715,9 @@ The KNN model was tuned over alternative feature subsets and values of k. Based 
 
 Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.
 
-## Question 2b)
+### b)
 
-### Elastic-Net Logistic Regression
+#### 5 Model Performance Metric Summary:
 
 ```{r, echo = FALSE}
 
@@ -838,8 +754,6 @@ EN_Results <- data.frame(
 )
 
 ```
-
-### Random Forest
 
 ```{r, echo = FALSE}
 
@@ -905,8 +819,6 @@ save(RF_Results, file = randomForestMetricsFile)
 
 }
 ```
-
-TUNED MODEL FITTING & 5 METRIC SUMMARY GENERATION:
 
 ```{r}
 if (file.exists("knn_all_tuned_objects.RData")) {
@@ -998,6 +910,92 @@ knnMetricTable <- data.frame(
 
 ```
 
+```{r}
+if (file.exists("gbm_all_tuned_objects.RData")) {
+  load("gbm_all_tuned_objects.RData")
+} else {
+  set.seed(2026)
+  
+  # Fixed GBM hyperparameters
+  gbmGridFixed <- expand.grid(
+    n.trees = 300,
+    interaction.depth = 8,
+    shrinkage = 0.075,
+    n.minobsinnode = 20
+  )
+  
+  # 10-fold CV setup
+  gbmControl <- trainControl(
+    method = "cv",
+    number = 10,
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary,
+    savePredictions = "final",
+  )
+  
+  # Fit GBM with fixed hyperparameters
+  gbmCvModel <- train(
+    HighHost ~ .,
+    data = trainData,
+    method = "gbm",
+    trControl = gbmControl,
+    tuneGrid = gbmGridFixed,
+    metric = "ROC"
+  )
+  
+  # Out-of-fold predicted probabilities from CV
+  cvPred <- gbmCvModel$pred
+  
+  # If caret returns rows in a different order, keep only the chosen tuning row
+  cvPred <- cvPred %>%
+    filter(
+      n.trees == 300,
+      interaction.depth == 8,
+      shrinkage == 0.075,
+      n.minobsinnode == 20
+    )
+  
+  # Class predictions using tau = 0.5
+  tau <- 0.5
+  cvPred$PredClass <- ifelse(cvPred$Yes >= tau, "Yes", "No")
+  cvPred$PredClass <- factor(cvPred$PredClass, levels = c("No", "Yes"))
+  cvPred$obs <- factor(cvPred$obs, levels = c("No", "Yes"))
+  
+  # Confusion matrix
+  cm <- confusionMatrix(
+    data = cvPred$PredClass,
+    reference = cvPred$obs,
+    positive = "Yes"
+  )
+  
+  # AUROC from out-of-fold probabilities
+  aucValue <- as.numeric(
+    pROC::roc(response = cvPred$obs, predictor = cvPred$Yes, levels = c("No", "Yes"))$auc
+  )
+  
+  save(gbmGridFixed,
+         gbmControl,
+         gbmCvModel,
+         cvPred,
+         tau,
+         cm,
+         aucValue,
+         file = "gbm_all_tuned_objects.RData")
+
+}
+# Metrics table in requested order
+gbmMetricTable <- data.frame(
+  Model = "GBM Boosted Tree",
+  Accuracy = unname(cm$overall["Accuracy"]),
+  F1_Score = unname(cm$byClass["F1"]),
+  Precision = unname(cm$byClass["Precision"]),
+  Recall = unname(cm$byClass["Recall"]),
+  Specificity = unname(cm$byClass["Specificity"]),
+  AUROC = aucValue
+)
+
+```
+
 ```{r, echo = FALSE}
 
 all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
@@ -1056,6 +1054,8 @@ for (i in seq_along(folds)) {
     newdata = validFold,
     type = "prob"
   )[ , "Yes"]
+  
+head(cvPred)
 }
 ```
 
@@ -1091,17 +1091,17 @@ cvTauResults <- do.call(
   lapply(tauGrid, function(tau) metricAtTau(cvPred$obs, cvPred$probYes, tau))
 )
 
-bestTauRow <- cvTauResults[which.max(cvTauResults$`F1 Score`), ]
+bestTauRow <- cvTauResults[which.max(cvTauResults$F1.Score), ]
 bestTauRow
 ```
 
 ```{r}
-ggplot(cvTauResults, aes(x = tau, y = `F1 Score`)) +
+ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
   geom_line(linewidth = 1) +
   geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "red") +
   geom_point(
     data = bestTauRow,
-    aes(x = tau, y = `F1 Score`),
+    aes(x = tau, y = F1.Score),
     colour = "red",
     size = 3
   ) +
@@ -1111,5 +1111,163 @@ ggplot(cvTauResults, aes(x = tau, y = `F1 Score`)) +
     y = "CV F1 Score"
   ) +
   theme_minimal()
+```
+
+###b)
+
+```{r}
+cvRoc <- pROC::roc(
+  response = cvPred$obs,
+  predictor = cvPred$probYes,
+  levels = c("No", "Yes"),
+  quiet = TRUE
+)
+
+rocCoords <- data.frame(
+  Specificity = rev(cvRoc$specificities),
+  Sensitivity = rev(cvRoc$sensitivities),
+  Threshold = rev(cvRoc$thresholds)
+)
+
+bestTau <- bestTauRow$tau
+
+bestPointMetrics <- metricAtTau(cvPred$obs, cvPred$probYes, bestTau)
+
+bestPoint <- data.frame(
+  FPR = 1 - bestPointMetrics$Specificity,
+  TPR = bestPointMetrics$Recall,
+  tau = bestTau,
+  F1 = bestPointMetrics$F1.Score
+)
+```
+
+```{r}
+ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
+  geom_line(linewidth = 1) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dotted", colour = "grey50") +
+  geom_point(
+    data = bestPoint,
+    aes(x = FPR, y = TPR),
+    colour = "red",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = bestPoint$FPR,
+    y = bestPoint$TPR,
+    label = paste0(
+      "F1 = ", round(bestPoint$F1, 3),
+      "\n",
+      "tau = ", round(bestPoint$tau, 2)
+    ),
+    hjust = -0.1,
+    vjust = -0.5,
+    size = 4
+  ) +
+  labs(
+    title = "CV ROC Curve",
+    x = "False Positive Rate",
+    y = "True Positive Rate"
+  ) +
+  theme_minimal()
+```
+
+### c)
+
+```{r}
+cvAUC <- as.numeric(cvRoc$auc)
+
+cvMetricTable <- data.frame(
+  Accuracy = bestTauRow$Accuracy,
+  `F1 Score` = bestTauRow$F1.Score,
+  Precision = bestTauRow$Precision,
+  Recall = bestTauRow$Recall,
+  Specificity = bestTauRow$Specificity,
+  AUROC = cvAUC
+)
+
+round(cvMetricTable, 4)
+```
+
+```{r}
+set.seed(2026)
+
+finalRfModel <- randomForest(
+  HighHost ~ .,
+  data = trainData,
+  mtry = 4,
+  ntree = 200,
+  nodesize = 5,
+  importance = TRUE
+)
+```
+
+```{r}
+testProb <- predict(
+  finalRfModel,
+  newdata = testData,
+  type = "prob"
+)[ , "Yes"]
+
+testPredClass <- ifelse(testProb >= bestTau, "Yes", "No")
+testPredClass <- factor(testPredClass, levels = c("No", "Yes"))
+```
+
+```{r}
+testCm <- confusionMatrix(
+  data = testPredClass,
+  reference = testData$HighHost,
+  positive = "Yes"
+)
+
+testAUC <- as.numeric(
+  pROC::roc(
+    response = testData$HighHost,
+    predictor = testProb,
+    levels = c("No", "Yes"),
+    quiet = TRUE
+  )$auc
+)
+
+testMetricTable <- data.frame(
+  Accuracy = unname(testCm$overall["Accuracy"]),
+  `F1 Score` = unname(testCm$byClass["F1"]),
+  Precision = unname(testCm$byClass["Precision"]),
+  Recall = unname(testCm$byClass["Recall"]),
+  Specificity = unname(testCm$byClass["Specificity"]),
+  AUROC = testAUC
+)
+
+round(testMetricTable, 4)
+```
+
+```{r}
+comparisonTable <- bind_rows(
+  `CV at optimal tau` = cvMetricTable,
+  `Test at optimal tau` = testMetricTable,
+  .id = "Set"
+)
+
+comparisonTable
+```
+
+```{r}
+cat("Best Tau:",round(bestTau, 4))
+```
+
+```{r}
+save(
+  cvPred,
+  cvTauResults,
+  bestTauRow,
+  bestTau,
+  cvRoc,
+  cvMetricTable,
+  finalRfModel,
+  testProb,
+  testMetricTable,
+  comparisonTable,
+  file = "rf_threshold_optimisation_objects.RData"
+)
 ```
 
