@@ -16,6 +16,11 @@ library(gbm)
 library(caret)
 library(ggplot2)
 library(pROC)
+library(pdp)
+library(vip)
+library(grid)
+library(gridExtra)
+library(kableExtra)
 ```
 
 ```{r, echo = FALSE}
@@ -680,18 +685,17 @@ barplot(
 )
 ```
 
-
 The feature search space consisted of the following candidate subsets:
 
 Subset1: host_acceptance_rate, host_response_time, host_since_days
 
 Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
 
-Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights 
+Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
 
 Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
 
-Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price 
+Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
 
 The neighbourhood size search space was:
 
@@ -1383,3 +1387,157 @@ save(
 )
 ```
 
+### Question 4a)
+
+```{r, echo = FALSE}
+load("randomForestModel.RData")
+
+vip(randomForestModel, num_features = 28) +
+  labs(title = NULL,
+       x = NULL,
+       y = "Variable Importance")
+```
+
+The variable importance plot for the final random forest model shows that the most important predictors with the most influence are host_since_days, host_acceptance_rate, latitude, maximum_nights, price and host_response_time. This suggests that the model relies heavily upon a mixture of host experience, host behavior, location and actual listing characteristics when predicting whether a listing belongs to the HighHost class.
+
+With host_since_days and host_acceptance_rate being ranked so highly, we can infer that host related characteristics are extremely important in this particular classification problem. Hosts who have been in the business longer and have a higher acceptance rate for bookings provide stronger signals to the model. Latitude's and longitude's high importance also shows that location is important in our classification problem, meaning that listings in some areas are more likely than others to have been listed by a "HighHost".
+
+On the other hand, factors such as beds, bathrooms and whether they have phone verification are of far less importance to our model. This means that once the more important variables such as host information, location and listing characteristics are taken into account, these low importance factors provide little more accuracy to our model.
+
+### b)
+
+```{r, echo = FALSE}
+
+if (file.exists("pdp_plots.png")) {
+  knitr::include_graphics("pdp_plots.png") 
+} else {
+
+  x_train <- subset(trainData, select = -HighHost)
+
+  rf_prob_yes <- function(object, newdata) {
+    predict(object, newdata = newdata, type = "prob")[, "Yes"]
+  }
+
+  p1 <- pdp::partial(randomForestModel,
+                pred.var = "price",
+                train = x_train,
+                pred.fun = rf_prob_yes,
+                grid.resolution = 25,
+                ice = FALSE)
+
+  p2 <- pdp::partial(randomForestModel,
+                pred.var = "host_since_days",
+                train = x_train,
+                pred.fun = rf_prob_yes,
+                grid.resolution = 25,
+                ice = FALSE)
+
+  p3 <- pdp::partial(randomForestModel,
+                pred.var = "host_acceptance_rate",
+                train = x_train,
+                pred.fun = rf_prob_yes,
+                grid.resolution = 25,
+                ice = FALSE)
+
+  p4 <- pdp::partial(randomForestModel,
+                pred.var = "latitude",
+                train = x_train,
+                pred.fun = rf_prob_yes,
+                grid.resolution = 25,
+                ice = FALSE)
+  
+  png("pdp_plots.png", width = 1200, height = 900, res = 150)
+  
+  grid.arrange(
+    pdp::plotPartial(p1, plot.pdp = TRUE, alpha = 0, xlab = "Price", ylab = ""),
+    pdp::plotPartial(p2, plot.pdp = TRUE, alpha = 0, xlab = "Host since days", ylab = ""),
+    pdp::plotPartial(p3, plot.pdp = TRUE, alpha = 0, xlab = "Host acceptance rate", ylab = ""),
+    pdp::plotPartial(p4, plot.pdp = TRUE, alpha = 0, xlab = "Latitude", ylab = ""),
+    ncol = 2
+  )
+
+  grid.text("Predicted P(HighHost = Yes)", x = 0.03, rot = 90)
+
+  dev.off()
+  knitr::include_graphics("pdp_plots.png")
+}
+
+
+## Fix host response time x-axis labels
+
+```
+
+The partial dependence plots selected to plot were Price, Host since days, Host acceptance rate and Latitude. These factors were chosen because they were some of the most important predictors in our variable importance plot, and also because they each described different areas in this classification problem. Price describes the sector in the market the listing is, Host since days describes host experience, Host acceptance rate describes demand, and latitude describes location across all the listings. This unique combination of different variables covers the different factors that could describe why a listing is a "HighHost" one.
+
+For Price, the predicted probability of a host being a "HighHost" rises slightly as the price initially increases, but afterwards it plateaus at higher prices. This suggests that very low priced listings are less likely to be a "HighHost" listing, but beyond that there is little to no effect. This could also be because of outliers at the top end of the price scale, skewing our data, when the majority of price listings do fall into this initial increase in our partial dependence plot.
+
+For Host since days, the plot shows a decreasing trend in which gets slightly steeper as the number of days increases. This suggests that listings associated with hosts who have been listing on Airbnb for a longer period of time tend to have a lower probability of being a "HighHost" listing. While this trend is not dramatic, it does indicate in some sense that "HighHost" listings tend to come from "younger" hosts, the probability that a listing was made by a host with more than 2 listed properties is higher when the host has not been a host on Airbnb for as long.
+
+For Host acceptance rate, the relationship is positive up until high rates. It increases at an increasing rate up until around 95%, after which there is a sharp drop. This indicates that listings with higher acceptance rate will tend to be a "HighHost" listing, which makes sense, as hosts with more properties are more likely to have higher acceptance rates (as they are not just renting out their home). However, the sharp drop at the end is likely due to the boundary constraint of having a 100% acceptance rate. This sharp drop may be caused by a large number of observations at this boundary.
+
+For latitude, the partial dependence plot shows slight dependence to location. The probability of a listing being a "HighHost" listing increases slightly as latitude increases, indicating that the more North a listing is, the higher the probability that the listing is a "HighHost" one. This plot does show some partial dependence, but would likely make more sense when comparing both latitude and longitude to the probability of a listing being a "HighHost" one at the same time.
+
+Overall, the plots show that the strongest partial dependence comes from Host acceptance rate, and less so from Host since days and location. The flat shapes of the graphs shows that the random forest is not just relying of each variable independently, but it is rather using the combined effects between these predictors.
+
+```{r, echo = FALSE}
+
+rf_test_prob <- predict(randomForestModel, newdata = testData, type = "prob")[, "Yes"]
+rf_test_pred <- ifelse(rf_test_prob >= 0.5, "Yes", "No")
+
+y_test_true <- as.character(testData$HighHost)
+
+FP <- testData[rf_test_pred == "Yes" & y_test_true == "No", ]
+FN <- testData[rf_test_pred == "No" & y_test_true == "Yes", ]
+
+TP <- testData[rf_test_pred == "Yes" & y_test_true == "Yes", ]
+TN <- testData[rf_test_pred == "No" & y_test_true == "No", ]
+
+FP$actual <- y_test_true[rf_test_pred == "Yes" & y_test_true == "No"]
+FP$predicted <- rf_test_pred[rf_test_pred == "Yes" & y_test_true == "No"]
+FP$pred_prob_yes <- rf_test_prob[rf_test_pred == "Yes" & y_test_true == "No"]
+
+FN$actual <- y_test_true[rf_test_pred == "No" & y_test_true == "Yes"]
+FN$predicted <- rf_test_pred[rf_test_pred == "No" & y_test_true == "Yes"]
+FN$pred_prob_yes <- rf_test_prob[rf_test_pred == "No" & y_test_true == "Yes"]
+
+set.seed(2004)
+
+FP_5 <- FP[sample(nrow(FP), 5), ]
+FN_5 <- FN[sample(nrow(FN), 5), ]
+
+#mean(TP$price)
+#mean(FP$price)
+#mean(TN$price)
+#mean(FN$price)
+
+#mean(TP$reviews_per_month)
+#mean(FP$reviews_per_month)
+#mean(TN$reviews_per_month)
+#mean(FN$reviews_per_month)
+
+#mean(TP$review_scores_rating)
+#mean(FP$review_scores_rating)
+#mean(TN$review_scores_rating)
+#mean(FN$review_scores_rating)
+
+#mean(TP$host_acceptance_rate)
+#mean(FP$host_acceptance_rate)
+#mean(TN$host_acceptance_rate)
+#mean(FN$host_acceptance_rate)
+
+#mean(TP$price)
+#mean(FP$price)
+#mean(TN$price)
+#mean(FN$price)
+
+FP_5
+FN_5
+
+
+```
+
+Listings that were predicted to be "HighHosts" (True positives and False positives) tended to have lower review score ratings, and listings that were predicted to not be "HighHosts" had higher ones. This trend was notices in our 5 random False Positives and False Negatives. The lower review scores rating caused these False Positives to be misclassified as "HighHosts" when they were not, and the higher review scores in the False negatives case caused them to be misclassified as not being "HighHost" listings when they in fact were.
+
+There is also a trend for the host acceptance rate to cause misclassifications. Positive classifications tend to be for those listings that have higher host acceptance rates, while negative classifications are those with lower host acceptance rates. As we can see in our 5 random False positives and False negatives, the False positives were incorrectly classified due in part to having higher host acceptance rates (which the positive cases have), while the False negative cases were misclassified because their host acceptance rate was particularly low.
+
+Price also seems to show a bit of a pattern with respects to misclassifications. Cases that are classified as positive for being a "HighHost", tend to have higher listings prices, and those that are not classified at "HighHosts" tend to have lower listings prices. The false positives have a higher price, and this could be part of the reason why they were misclassified as "HighHosts" when they are not. The false negatives have lower prices than expected for "HighHosts", and are misclassified into not being a "HighHost".
