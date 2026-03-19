@@ -50,25 +50,73 @@ This project will be modelling the binary target variable fitted to the Host Lis
 
 There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
 
-```{r echo = FALSE}
-hostUnique <- trainDataC |> 
+```{r}
+hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
 
-HHtrain <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
-nHHtrain <- 100 - round(mean(hostUnique$host_listings_count > 2) * 100,2)
+xValues <- 1:6
+
+imbalanceByX <- data.frame(
+  x = xValues,
+  HighHost = sapply(xValues, function(x) {
+    mean(hostUniqueTrain$host_listings_count > x) * 100
+  })
+)
+
+imbalanceByX$Not_HighHost <- 100 - imbalanceByX$HighHost
+
+imbalanceLong <- imbalanceByX |>
+  pivot_longer(cols = c(HighHost, Not_HighHost),
+               names_to = "Class",
+               values_to = "Percentage")
+
+ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = 1:6) +
+  labs(
+    x = "x",
+    y = "Percentage",
+    colour = "Classification"
+  ) +
+  theme_minimal()
 ```
 
-**Class Imbalance for x = 2 on Training Data:** <br> HighHost: `r HHtrain`% <br> Not HighHost: `r nHHtrain`% <br>
 
-```{r echo = FALSE}
-hostUnique <- testDataC |> 
+```{r}
+library(dplyr)
+library(knitr)
+
+hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
 
-HHtest <- round(mean(hostUnique$host_listings_count > 2) * 100,2)
-nHHtest <- 100 - round(mean(hostUnique$host_listings_count > 2) * 100,2)
+HHtrain <- round(mean(hostUniqueTrain$host_listings_count > 2) * 100, 2)
+nHHtrain <- round(100 - HHtrain, 2)
+
+hostUniqueTest <- testDataC |>
+  distinct(host_id, host_listings_count)
+
+HHtest <- round(mean(hostUniqueTest$host_listings_count > 2) * 100, 2)
+nHHtest <- round(100 - HHtest, 2)
+
+imbalanceTable <- data.frame(
+  Dataset = c("Training", "Test"),
+  HighHost = c(HHtrain, HHtest),
+  Not_HighHost = c(nHHtrain, nHHtest)
+)
+
+latexTable <- kable(
+  imbalanceTable,
+  caption = "Class imbalance for x = 2 on the training and test data",
+  col.names = c("Dataset", "HighHost (%)", "Not HighHost (%)"),
+  format = "latex",
+  booktabs = TRUE,
+  align = c("l", "c", "c")
+)
+
+cat(latexTable)
 ```
 
-**Class Imbalance for x = 2 on Test Data:** <br>HighHost: `r HHtest`% <br>Not HighHost: `r nHHtest`%
 
 $$
 \text{HighHost} =
@@ -104,6 +152,23 @@ trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
 trainData <- listings |> dplyr::slice(trainIndex)
 testData  <- listings |> dplyr::slice(-trainIndex)
 ```
+
+```{r, echo = false}
+library(ggplot2)
+
+ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward)) +
+  geom_point(size = 1, alpha = 0.6) +
+  labs(
+    x = "Longitude",
+    y = "Latitude",
+    colour = "Ward"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none"
+  )
+```
+
 
 #### Data Pre-Processing:
 
@@ -179,10 +244,8 @@ testData  <- listings |> dplyr::slice(-trainIndex)
   
   # Elastic Net : Numeric
   # Random Forest : Factor
-  # GBM : Numeric
+  # GBM : Factor
   # KNN : Factor
-  
-  # ENSURE DONE BEFORE MODEL CREATION
 ```
 
 #### Regularised Elastic-Net Logistic Regression:
@@ -286,7 +349,7 @@ text(x = elasticNetResults$alpha[index_en],
 
 print(elasticNetModel)
 coef(elasticNetModel, s = "lambda.min")
-plot(elasticNetModel) #check werid plateau at 1 factor
+plot(elasticNetModel, ylab = "AUROC") #check werid plateau at 1 factor
 ```
 
 The Regularised Elastic-Net Regression Model was used as a binary classification model for predicting whether a listing is a high host or not. Logistic regression was appropriate here because the response variable is binary, and it models the probability that an observation belongs to a class using the log-odds function. With a large set of predictors, ordinary logistic regression may over-fit. This is addressed by regularization, through the elastic-net penalty.
@@ -410,22 +473,43 @@ RANDOM FOREST FITTING INSPECTION:
 ```{r, echo = FALSE}
 
 library(ggplot2)
+
+chosenPoint <- data.frame(
+  mtry = 4,
+  ntree = 200,
+  nodesize = 5
+)
+
+chosenPoint <- merge(
+  chosenPoint,
+  rfResults,
+  by = c("mtry", "ntree", "nodesize")
+)
+
 ggplot(rfResults, aes(x = ntree, y = mean_auc,
                       colour = factor(nodesize),
                       group = factor(nodesize))) +
   geom_line() +
   geom_point(size = 2) +
-  facet_wrap(~ mtry, scales = "fixed") +
+  geom_point(
+    data = chosenPoint,
+    aes(x = ntree, y = mean_auc),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.5,
+    stroke = 1.5,
+    fill = "gold",
+    colour = "black"
+  ) +
+  facet_wrap(~ mtry, scales = "fixed", labeller = label_both) +
   labs(
-    title = "Random forest tuning results",
-    x = "Number of trees",
+    x = "Number of Trees",
     y = "AUROC",
-    colour = "nodesize"
+    colour = "Node Size",
   ) +
   theme_minimal()
 
 
-randomForestModel
 plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
 #print(randomForestModel)
 #importance(randomForestModel)
@@ -478,7 +562,7 @@ This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluat
 
 GBM BOOSTED TREE MODEL FITTING:
 
-```{r}
+```{r, echo = FALSE}
 if (file.exists("gbmTuningObjects.RData")) {
   load("gbmTuningObjects.RData")
 } else {
@@ -518,7 +602,7 @@ if (file.exists("gbmTuningObjects.RData")) {
 
 GBM BOOSTED TREE MODEL TUNING:
 
-```{r}
+```{r, echo = FALSE}
 load("gbmTuningObjects.RData")
 
 chosenPoint <- data.frame(
@@ -559,7 +643,6 @@ ggplot(
   facet_grid(shrinkage ~ interaction.depth, labeller = label_both) +
   scale_x_continuous(breaks = c(100, 200, 300, 400, 500)) +
   labs(
-    title = "GBM Tuning Results",
     x = "Number of Trees",
     y = "Mean CV AUROC",
     colour = "Min # of Obs in Node"
@@ -580,7 +663,7 @@ For the K-nearest neighbours model, a supervised classification approach was use
 
 In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature's selection in it being dependent on its Relative Influence as depicted below;
 
-```{r}
+```{r, echo = FALSE}
 load("gbm_all_objects.RData")
 importanceTable <- summary(gbmModel, n.trees = 300, plotit = FALSE)
 
@@ -590,7 +673,7 @@ barplot(
   rev(importanceTable$rel.inf),
   names.arg = rev(importanceTable$var),
   horiz = TRUE,
-  col = "blue",
+  col = "grey",
   border = "black",
   xlab = "Relative Influence",
   cex.names = 0.5
@@ -708,7 +791,6 @@ ggplot(
   geom_line() +
   geom_point(size = 2) +
   labs(
-    title = "K-Nearest Neighbours Tuning Results",
     x = "Number of Neighbours (k)",
     y = "Mean AUROC",
     colour = "Feature Set"
@@ -825,7 +907,7 @@ save(RF_Results, file = randomForestMetricsFile)
 }
 ```
 
-```{r}
+```{r, echo = FALSE}
 if (file.exists("knn_all_tuned_objects.RData")) {
   load("knn_all_tuned_objects.RData")
 } else {
@@ -915,7 +997,7 @@ knnMetricTable <- data.frame(
 
 ```
 
-```{r}
+```{r, echo = FALSE}
 if (file.exists("gbm_all_tuned_objects.RData")) {
   load("gbm_all_tuned_objects.RData")
 } else {
@@ -1005,17 +1087,26 @@ gbmMetricTable <- data.frame(
 
 all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
 
-knitr::kable(all_metrics,
-             digits = 3, caption = "CV perfomance metrics",
-             col.names = c("Model", "Accuracy", "F1 score", "Precision", "Recall", "Specificity", "AUROC"),
-             align = c("l", "c", "c", "c", "c", "c", "c"))
+all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
+
+latexTable <- kable(
+  all_metrics,
+  format = "latex",
+  digits = 3,
+  caption = "CV performance metrics",
+  col.names = c("Model", "Accuracy", "F1 Score", "Precision", "Recall", "Specificity", "AUROC"),
+  align = c("l", "c", "c", "c", "c", "c", "c"),
+  booktabs = FALSE
+)
+
+cat(latexTable)
 
 metric_long <- pivot_longer(all_metrics, cols = -Model, names_to = "Metric", values_to = "Value")
 
 ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
   geom_col(position = "dodge") +
   ylim(0,1) +
-  labs(title = "Cross-Validated Performance Metrics by Model", x = NULL, y = "Metric Value") +
+  labs(x = NULL, y = "Metric Value") +
   theme_minimal()
 
 ```
@@ -1025,46 +1116,45 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
 ###a)
 
 ```{r, echo = FALSE}
-trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
-```
-
-```{r}
-set.seed(2026)
-
-folds <- createFolds(trainData$HighHost, k = 10, returnTrain = FALSE)
-
-cvPred <- data.frame(
-  obs = trainData$HighHost,
-  probYes = NA_real_
-)
-
-for (i in seq_along(folds)) {
+if (file.exists("tauTuningObjects.RData")) {
+  load("tauTuningObjects.RData")
+} else {
+  set.seed(2026)
   
-  validIndex <- folds[[i]]
-  trainFold <- trainData[-validIndex, ]
-  validFold <- trainData[validIndex, ]
+  folds <- createFolds(trainData$HighHost, k = 10, returnTrain = FALSE)
   
-  rfFoldModel <- randomForest(
-    HighHost ~ .,
-    data = trainFold,
-    mtry = 4,
-    ntree = 200,
-    nodesize = 5,
-    importance = FALSE
+  cvPred <- data.frame(
+    obs = trainData$HighHost,
+    probYes = NA_real_
   )
   
-  cvPred$probYes[validIndex] <- predict(
-    rfFoldModel,
-    newdata = validFold,
-    type = "prob"
-  )[ , "Yes"]
-  
-head(cvPred)
+  for (i in seq_along(folds)) {
+    
+    validIndex <- folds[[i]]
+    trainFold <- trainData[-validIndex, ]
+    validFold <- trainData[validIndex, ]
+    
+    rfFoldModel <- randomForest(
+      HighHost ~ .,
+      data = trainFold,
+      mtry = 4,
+      ntree = 200,
+      nodesize = 5,
+      importance = FALSE
+    )
+    
+    cvPred$probYes[validIndex] <- predict(
+      rfFoldModel,
+      newdata = validFold,
+      type = "prob"
+    )[ , "Yes"]
+    
+    save(folds, cvPred, rfFoldModel, file = "tauTuningObjects.RData")
+  }
 }
 ```
 
-```{r}
+```{r, echo = FALSE}
 metricAtTau <- function(obs, probYes, tau) {
   
   predClass <- ifelse(probYes >= tau, "Yes", "No")
@@ -1088,7 +1178,7 @@ metricAtTau <- function(obs, probYes, tau) {
 }
 ```
 
-```{r}
+```{r, echo = FALSE}
 tauGrid <- seq(0.01, 0.99, by = 0.01)
 
 cvTauResults <- do.call(
@@ -1100,7 +1190,7 @@ bestTauRow <- cvTauResults[which.max(cvTauResults$F1.Score), ]
 bestTauRow
 ```
 
-```{r}
+```{r, echo = FALSE}
 ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
   geom_line(linewidth = 1) +
   geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "red") +
@@ -1111,7 +1201,6 @@ ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
     size = 3
   ) +
   labs(
-    title = "CV F1 Score as a Function of Threshold",
     x = expression(tau),
     y = "CV F1 Score"
   ) +
@@ -1120,7 +1209,7 @@ ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
 
 ###b)
 
-```{r}
+```{r, echo = FALSE}
 cvRoc <- pROC::roc(
   response = cvPred$obs,
   predictor = cvPred$probYes,
@@ -1146,7 +1235,7 @@ bestPoint <- data.frame(
 )
 ```
 
-```{r}
+```{r, echo = FALSE}
 ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
   geom_line(linewidth = 1) +
   geom_abline(intercept = 0, slope = 1, linetype = "dotted", colour = "grey50") +
@@ -1163,14 +1252,13 @@ ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
     label = paste0(
       "F1 = ", round(bestPoint$F1, 3),
       "\n",
-      "tau = ", round(bestPoint$tau, 2)
+      expression(tau), " = " ,round(bestPoint$tau, 2)
     ),
-    hjust = -0.1,
+    hjust = 0.5,
     vjust = -0.5,
     size = 4
   ) +
   labs(
-    title = "CV ROC Curve",
     x = "False Positive Rate",
     y = "True Positive Rate"
   ) +
@@ -1179,7 +1267,7 @@ ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
 
 ### c)
 
-```{r}
+```{r, echo = FALSE}
 cvAUC <- as.numeric(cvRoc$auc)
 
 cvMetricTable <- data.frame(
@@ -1194,20 +1282,26 @@ cvMetricTable <- data.frame(
 round(cvMetricTable, 4)
 ```
 
-```{r}
-set.seed(2026)
-
-finalRfModel <- randomForest(
-  HighHost ~ .,
-  data = trainData,
-  mtry = 4,
-  ntree = 200,
-  nodesize = 5,
-  importance = TRUE
-)
+```{r, echo = FALSE}
+if (file.exists("finalRFModel.RData")) {
+  load("finalRFModel.RData")
+} else {
+  set.seed(2026)
+  
+  finalRfModel <- randomForest(
+    HighHost ~ .,
+    data = trainData,
+    mtry = 4,
+    ntree = 200,
+    nodesize = 5,
+    importance = TRUE
+  )
+  
+  save(finalRfModel, file = "finalRFModel.RData")
+}
 ```
 
-```{r}
+```{r, echo = FALSE}
 testProb <- predict(
   finalRfModel,
   newdata = testData,
@@ -1218,7 +1312,7 @@ testPredClass <- ifelse(testProb >= bestTau, "Yes", "No")
 testPredClass <- factor(testPredClass, levels = c("No", "Yes"))
 ```
 
-```{r}
+```{r, echo = FALSE}
 testCm <- confusionMatrix(
   data = testPredClass,
   reference = testData$HighHost,
@@ -1246,21 +1340,34 @@ testMetricTable <- data.frame(
 round(testMetricTable, 4)
 ```
 
-```{r}
+```{r, echo = FALSE}
+library(dplyr)
+library(knitr)
+
 comparisonTable <- bind_rows(
-  `CV at optimal tau` = cvMetricTable,
-  `Test at optimal tau` = testMetricTable,
+  `CV at Optimal Tau` = cvMetricTable,
+  `Test at Optimal Tau` = testMetricTable,
   .id = "Set"
 )
 
-comparisonTable
+latexTable <- kable(
+  comparisonTable,
+  format = "latex",
+  digits = 3,
+  caption = "Comparison of CV and test performance at the optimal threshold",
+  col.names = c("Set", "Accuracy", "F1 Score", "Precision", "Recall", "Specificity", "AUROC"),
+  align = "lcccccc",
+  booktabs = FALSE
+)
+
+cat(latexTable)
 ```
 
-```{r}
+```{r, echo = FALSE}
 cat("Best Tau:",round(bestTau, 4))
 ```
 
-```{r}
+```{r, echo = FALSE}
 save(
   cvPred,
   cvTauResults,
