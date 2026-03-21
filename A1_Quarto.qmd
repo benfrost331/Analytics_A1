@@ -28,13 +28,9 @@ library(kableExtra)
 listings <- read.csv("listings.csv")
 ```
 
-## Introduction:
+## Question 1:
 
-The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. Based on any given listing observation the analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a 'High Host' and explore this response's potential housing-market impact. Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a 'High Host'.
-
-The analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a 'High Host' is then derived and defined with the property number threshold being determined using the training data. Several classification models are subsequently fitted and tuned, the models types include elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.
-
-Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.
+### Target Variable Creation:
 
 ```{r echo = FALSE}
 # Training & Test Set Split (Raw Data)
@@ -47,13 +43,6 @@ trainDataC <- listings |> dplyr::slice(trainIndex)
 testDataC  <- listings |> dplyr::slice(-trainIndex)
 ```
 
-## Question 1:
-
-### Target Variable Creation:
-
-This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.
-
-There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.
 
 ```{r}
 hostUniqueTrain <- trainDataC |>
@@ -86,7 +75,6 @@ ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
   ) +
   theme_minimal()
 ```
-
 
 ```{r}
 library(dplyr)
@@ -122,7 +110,6 @@ latexTable <- kable(
 cat(latexTable)
 ```
 
-
 $$
 \text{HighHost} =
 \begin{cases}
@@ -130,8 +117,6 @@ $$
 0 & \text{otherwise}
 \end{cases}
 $$
-
-We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our training data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.
 
 ```{r echo = FALSE}
 hostCutoff = 2
@@ -173,7 +158,6 @@ ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward))
     legend.position = "none"
   )
 ```
-
 
 #### Data Pre-Processing:
 
@@ -321,8 +305,6 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
 }
 ```
 
-REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:
-
 ```{r, echo = FALSE}
 plot(elasticNetResults$alpha, elasticNetResults$auc,
      type = "l",
@@ -356,18 +338,6 @@ print(elasticNetModel)
 coef(elasticNetModel, s = "lambda.min")
 plot(elasticNetModel, ylab = "AUROC") #check werid plateau at 1 factor
 ```
-
-The Regularised Elastic-Net Regression Model was used as a binary classification model for predicting whether a listing is a high host or not. Logistic regression was appropriate here because the response variable is binary, and it models the probability that an observation belongs to a class using the log-odds function. With a large set of predictors, ordinary logistic regression may over-fit. This is addressed by regularization, through the elastic-net penalty.
-
-The elastic-net penalty combines the L1 (lasso) and L2 (ridge) penalties. The lasso component performs variable selection, shrinking some coefficients exactly to zero, while the ridge component shrinks coefficients to zero without necessarily removing them. Elastic-net is thus a useful combination of lasso and ridge regression.
-
-We used the training set to fit our model, where we tuned the model to the two hyper-parameters: α, which controls the balance between ridge and lasso penalization, and λ, which controls the level of the penalty.
-
-To tune the model we searched over the range of $α \in (0,1)$, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).
-
-The optimal alpha value that we chose was α = 0.23, and the corresponding lambda value of λ = 0.0001935441, and we then refitted the final elastic-net model on the training set with this chosen α value and its corresponding optimal λ.
-
-CONVERTING HighHost TO BE A FACTOR:
 
 ```{r, echo = FALSE}
 trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
@@ -473,8 +443,6 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
 }
 ```
 
-RANDOM FOREST FITTING INSPECTION:
-
 ```{r, echo = FALSE}
 
 library(ggplot2)
@@ -521,51 +489,7 @@ plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", 
 #varImpPlot(randomForestModel)
 ```
 
-We used a random forest classifier to predict the binary response variable, HighHost. Random Forests are a tree-based method that build a large number of classification trees on bootstrap samples of the training data and then combine their predictions. This approach is useful because it can capture non-linear relationships and interactions between predictors. It is also generally less prone to over fitting than a single decision tree.
-
-At each split in the tree, only a random subset of predictors are considered. This introduces randomness and reduces correlation between trees, which improves the overall model. Since the outcome is binary, the response variable was treated as a factor so that the model was fitted as a classification forest.
-
-The model was fitted using the training set only. The hyper-parameters used to tune were:
-
--   mtry = the number of predictors randomly chosen at each split
-
--   ntree = the total number of trees grown in the forest
-
--   nodesize = the minimum final node size, which dictates how deep the trees grow
-
-$mtry \in \{2,4,6,8,10,12\}$
-
-$ntree \in \{100, 200, 300\}$
-
-$nodesize \in \{1,5,10\}$
-
-This gave a total of $6 \times 3 \times 3 = 54$ different models. The mtry values were chosen to cover values around the default value of approximately $\sqrt{p}$, where $p$ is the number of predictors. The ntree values were chosen to compare a relatively small, moderate and large forest, and the nodesize values were chosen to allow a comparison between shallower, more moderate and deeper trees.
-
-Hyper-parameter tuning was performed on 10-fold cross-validation on the training set. For each different combination of hyper-parameters, a new model was trained on 9 folds and the AUROC was calculated on the remaining fold. The mean AUROC across the 10-folds was then used to tune the model. The selected random forest hyper-parameters were then chosen to be: mtry = 12, ntree = 700 and nodesize = 1.
-
-We can see that the optimal number of trees was on the upper boundary of our tuning Grid, but looking at our plots, we can see that the AUROC with respect to ntree is close to plateaued, so by extending our grid we would not gain much more accuracy. The same can be said for the mtry, as once mtry gets to 8, 10 and 12, the increases in AUROC were small.
-
-The final random forest model was then refitted on the full training set using these selected hyper-parameters.
-
 #### GBM Boosted Tree Model:
-
-For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.
-
-Hyperparameter selection was carried out using a grid-search approach on the training set only. For each candidate combination of tuning parameters, a GBM model was fitted with 10-fold cross-validation and model performance was assessed using the cross-validated Bernoulli deviance. The preferred hyperparameter combination was the one that achieved the lowest cross-validated error without risk of overfitting to the training data. After identifying the best combination of values for these hyperparameters the final GBM model has been refitted using these values.
-
-The hyperparameter search space was:
-
-n.trees ∈ {500, 750, 1000, 1250, 1500}
-
-interaction.depth ∈ {3, 5, 8, 10}
-
-shrinkage ∈ {0.01, 0.05, 0.1}
-
-n.minobsinnode ∈ {5, 10, 20}
-
-This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.
-
-GBM BOOSTED TREE MODEL FITTING:
 
 ```{r, echo = FALSE}
 if (file.exists("gbmTuningObjects.RData")) {
@@ -660,52 +584,30 @@ ggplot(
 
 ```
 
-Although the highest AUROC values were achieved in the more complex regions of the grid, the gains beyond moderate settings were very small. A tuning choice of n.trees = 1000, interaction.depth = 5, shrinkage = 0.05, and n.minobsinnode = 10 was therefore selected as a balanced specification, providing strong predictive performance while avoiding unnecessary additional model complexity.
-
 #### K-Nearest Neighbours Model:
-
-For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.
-
-In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature's selection in it being dependent on its Relative Influence as depicted below;
 
 ```{r, echo = FALSE}
 load("gbm_all_objects.RData")
 importanceTable <- summary(gbmModel, n.trees = 300, plotit = FALSE)
 
+top7 <- importanceTable[1:7, ]
+
 par(mar = c(5, 14, 4, 2) + 0.1, las = 1)
 
 barplot(
-  rev(importanceTable$rel.inf),
-  names.arg = rev(importanceTable$var),
+  rev(top7$rel.inf),
+  names.arg = rev(top7$var),
   horiz = TRUE,
   col = "grey",
   border = "black",
   xlab = "Relative Influence",
-  cex.names = 0.5
+  cex.names = 1.4,
+  cex.lab = 1.4
 )
 ```
 
-The feature search space consisted of the following candidate subsets:
-
-Subset1: host_acceptance_rate, host_response_time, host_since_days
-
-Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate
-
-Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights
-
-Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude
-
-Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price
-
-The neighbourhood size search space was:
-
-k ∈ {3,5,7,…,25}
-
-So the KNN tuning process searched jointly across 5 candidate feature sets and 12 candidate values of k.
-
 ```{r echo = FALSE}
 # K-NEAREST NEIGHBOURS FITTING:
-# REMOVE FEATURES WITH ZERO VARIANCE
 
 featureSets <- list(
   
@@ -764,7 +666,6 @@ if (file.exists("knn_all_objects.RData")) {
   knnResults <- do.call(rbind, knnResults)
   
   best_knn <- knnResults[which.max(knnResults$ROC), ]
-  best_knn
   
   save(
     knnFits,
@@ -776,8 +677,6 @@ if (file.exists("knn_all_objects.RData")) {
   )
 }
 ```
-
-K-NEAREST NEIGHBOURS INSPECTION:
 
 ```{r echo = FALSE}
 # K-NEAREST NEIGHBOURS TUNING:
@@ -801,10 +700,6 @@ ggplot(
   ) +
   theme_minimal()
 ```
-
-The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated AUROC. The preferred specification uses the feature set Subset2 which includes host_acceptance_rate, host_response_time, host_since_days and host_response_rate as features. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that these 4 host-related variables carry the most predictive signal for this classifier.
-
-Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.
 
 ### b)
 
@@ -1197,16 +1092,19 @@ bestTauRow
 ```{r, echo = FALSE}
 ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
   geom_line(linewidth = 1) +
-  geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "red") +
+  geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "black") +
   geom_point(
     data = bestTauRow,
     aes(x = tau, y = F1.Score),
-    colour = "red",
-    size = 3
+    shape = 21,
+    size = 2.5,
+    stroke = 1.5,
+    fill = "gold",
+    colour = "black"
   ) +
   labs(
-    x = expression(tau),
-    y = "CV F1 Score"
+    x = "Tau",
+    y = "CV F1 Score",
   ) +
   theme_minimal()
 ```
@@ -1387,7 +1285,9 @@ save(
 )
 ```
 
-### Question 4a)
+### Question 4
+
+###a)
 
 ```{r, echo = FALSE}
 load("randomForestModel.RData")
@@ -1397,12 +1297,6 @@ vip(randomForestModel, num_features = 28) +
        x = NULL,
        y = "Variable Importance")
 ```
-
-The variable importance plot for the final random forest model shows that the most important predictors with the most influence are host_since_days, host_acceptance_rate, latitude, maximum_nights, price and host_response_time. This suggests that the model relies heavily upon a mixture of host experience, host behavior, location and actual listing characteristics when predicting whether a listing belongs to the HighHost class.
-
-With host_since_days and host_acceptance_rate being ranked so highly, we can infer that host related characteristics are extremely important in this particular classification problem. Hosts who have been in the business longer and have a higher acceptance rate for bookings provide stronger signals to the model. Latitude's and longitude's high importance also shows that location is important in our classification problem, meaning that listings in some areas are more likely than others to have been listed by a "HighHost".
-
-On the other hand, factors such as beds, bathrooms and whether they have phone verification are of far less importance to our model. This means that once the more important variables such as host information, location and listing characteristics are taken into account, these low importance factors provide little more accuracy to our model.
 
 ### b)
 
@@ -1467,18 +1361,6 @@ if (file.exists("pdp_plots.png")) {
 
 ```
 
-The partial dependence plots selected to plot were Price, Host since days, Host acceptance rate and Latitude. These factors were chosen because they were some of the most important predictors in our variable importance plot, and also because they each described different areas in this classification problem. Price describes the sector in the market the listing is, Host since days describes host experience, Host acceptance rate describes demand, and latitude describes location across all the listings. This unique combination of different variables covers the different factors that could describe why a listing is a "HighHost" one.
-
-For Price, the predicted probability of a host being a "HighHost" rises slightly as the price initially increases, but afterwards it plateaus at higher prices. This suggests that very low priced listings are less likely to be a "HighHost" listing, but beyond that there is little to no effect. This could also be because of outliers at the top end of the price scale, skewing our data, when the majority of price listings do fall into this initial increase in our partial dependence plot.
-
-For Host since days, the plot shows a decreasing trend in which gets slightly steeper as the number of days increases. This suggests that listings associated with hosts who have been listing on Airbnb for a longer period of time tend to have a lower probability of being a "HighHost" listing. While this trend is not dramatic, it does indicate in some sense that "HighHost" listings tend to come from "younger" hosts, the probability that a listing was made by a host with more than 2 listed properties is higher when the host has not been a host on Airbnb for as long.
-
-For Host acceptance rate, the relationship is positive up until high rates. It increases at an increasing rate up until around 95%, after which there is a sharp drop. This indicates that listings with higher acceptance rate will tend to be a "HighHost" listing, which makes sense, as hosts with more properties are more likely to have higher acceptance rates (as they are not just renting out their home). However, the sharp drop at the end is likely due to the boundary constraint of having a 100% acceptance rate. This sharp drop may be caused by a large number of observations at this boundary.
-
-For latitude, the partial dependence plot shows slight dependence to location. The probability of a listing being a "HighHost" listing increases slightly as latitude increases, indicating that the more North a listing is, the higher the probability that the listing is a "HighHost" one. This plot does show some partial dependence, but would likely make more sense when comparing both latitude and longitude to the probability of a listing being a "HighHost" one at the same time.
-
-Overall, the plots show that the strongest partial dependence comes from Host acceptance rate, and less so from Host since days and location. The flat shapes of the graphs shows that the random forest is not just relying of each variable independently, but it is rather using the combined effects between these predictors.
-
 ```{r, echo = FALSE}
 
 rf_test_prob <- predict(randomForestModel, newdata = testData, type = "prob")[, "Yes"]
@@ -1535,9 +1417,3 @@ FN_5
 
 
 ```
-
-Listings that were predicted to be "HighHosts" (True positives and False positives) tended to have lower review score ratings, and listings that were predicted to not be "HighHosts" had higher ones. This trend was notices in our 5 random False Positives and False Negatives. The lower review scores rating caused these False Positives to be misclassified as "HighHosts" when they were not, and the higher review scores in the False negatives case caused them to be misclassified as not being "HighHost" listings when they in fact were.
-
-There is also a trend for the host acceptance rate to cause misclassifications. Positive classifications tend to be for those listings that have higher host acceptance rates, while negative classifications are those with lower host acceptance rates. As we can see in our 5 random False positives and False negatives, the False positives were incorrectly classified due in part to having higher host acceptance rates (which the positive cases have), while the False negative cases were misclassified because their host acceptance rate was particularly low.
-
-Price also seems to show a bit of a pattern with respects to misclassifications. Cases that are classified as positive for being a "HighHost", tend to have higher listings prices, and those that are not classified at "HighHosts" tend to have lower listings prices. The false positives have a higher price, and this could be part of the reason why they were misclassified as "HighHosts" when they are not. The false negatives have lower prices than expected for "HighHosts", and are misclassified into not being a "HighHost".
