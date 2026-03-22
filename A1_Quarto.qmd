@@ -73,7 +73,13 @@ ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
     y = "Percentage",
     colour = "Classification"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  )
 ```
 
 ```{r}
@@ -155,7 +161,8 @@ ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward))
   ) +
   theme_minimal() +
   theme(
-    legend.position = "none"
+    legend.position = "none",
+    axis.title = element_text(size = 16),
   )
 ```
 
@@ -309,11 +316,10 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
 plot(elasticNetResults$alpha, elasticNetResults$auc,
      type = "l",
      ylab = "AUROC",
-     xlab = "Alpha Value")
+     xlab = "Alpha Value",
+     cex.lab = 1.5)
 
 index_en <- which.max(elasticNetResults$auc)
-
-points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19) 
 
 #veritcal line
 x_left <- par("usr")[1]
@@ -327,16 +333,20 @@ segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
          x1 = elasticNetResults$alpha[index_en], y1 = elasticNetResults$auc[index_en],
          lty = 3)
 
+points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19, col = "gold",) 
+
 text(x = elasticNetResults$alpha[index_en],
      y = y_bottom,
-     labels = paste0("alpha = ", elasticNetResults$alpha[index_en]),
+     labels = paste0(elasticNetResults$alpha[index_en]),
      pos = 1,      
-     xpd = NA)
+     xpd = NA,
+     cex = 0.75,
+     col = "purple")
 
 
 print(elasticNetModel)
 coef(elasticNetModel, s = "lambda.min")
-plot(elasticNetModel, ylab = "AUROC") #check werid plateau at 1 factor
+plot(elasticNetModel, ylab = "AUROC", cex.lab = 1.5) #check werid plateau at 1 factor
 ```
 
 ```{r, echo = FALSE}
@@ -529,8 +539,6 @@ if (file.exists("gbmTuningObjects.RData")) {
 }
 ```
 
-GBM BOOSTED TREE MODEL TUNING:
-
 ```{r, echo = FALSE}
 load("gbmTuningObjects.RData")
 
@@ -682,6 +690,11 @@ if (file.exists("knn_all_objects.RData")) {
 # K-NEAREST NEIGHBOURS TUNING:
 load("knn_all_objects.RData")
 
+chosenPoint <- data.frame(
+  k = 3,
+  ROC = 0.840
+)
+
 ggplot(
   knnResults,
   aes(
@@ -693,6 +706,16 @@ ggplot(
 ) +
   geom_line() +
   geom_point(size = 2) +
+  geom_point(
+    data = chosenPoint,
+    aes(x = k, y = ROC),
+    inherit.aes = FALSE,
+    shape = 21,
+    size = 2.5,
+    stroke = 1.5,
+    fill = "gold",
+    colour = "black"
+  ) +
   labs(
     x = "Number of Neighbours (k)",
     y = "Mean AUROC",
@@ -1006,7 +1029,14 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
   geom_col(position = "dodge") +
   ylim(0,1) +
   labs(x = NULL, y = "Metric Value") +
-  theme_minimal()
+  scale_fill_brewer(palette = "Paired") +
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 9.7, face = "bold"),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  )
 
 ```
 
@@ -1106,7 +1136,13 @@ ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
     x = "Tau",
     y = "CV F1 Score",
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 9.7),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  )
 ```
 
 ###b)
@@ -1164,7 +1200,13 @@ ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
     x = "False Positive Rate",
     y = "True Positive Rate"
   ) +
-  theme_minimal()
+  theme_minimal() +
+  theme(
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 9.7),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  )
 ```
 
 ### c)
@@ -1414,6 +1456,5 @@ FN_5 <- FN[sample(nrow(FN), 5), ]
 
 FP_5
 FN_5
-
 
 ```
