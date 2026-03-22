@@ -77,8 +77,6 @@ ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
 ```
 
 ```{r}
-library(dplyr)
-library(knitr)
 
 hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
@@ -360,7 +358,7 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
   set.seed(2026)
   
   #folds for cv
-  foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+  fold <- sample(rep(1:10, length.out = nrow(trainData)))
   
   #number of parameters
   p <- ncol(trainData) - 1
@@ -379,24 +377,24 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
   
 #loop for each combination of hyperparameters  
 rfResults <- lapply(1:nrow(rfGrid), function(i) {
-  this_mtry     <- rfGrid$mtry[i]
-  this_ntree    <- rfGrid$ntree[i]
-  this_nodesize <- rfGrid$nodesize[i]
+  i_mtry     <- rfGrid$mtry[i]
+  i_ntree    <- rfGrid$ntree[i]
+  i_nodesize <- rfGrid$nodesize[i]
   
   fold_auc <- numeric(10)
   
   #loop for each cv fold
   for (k in 1:10) {
     
-    train_fold <- trainData[foldid != k, ]
-    valid_fold <- trainData[foldid == k, ]
+    train_fold <- trainData[fold != k, ]
+    valid_fold <- trainData[fold == k, ]
     
     rf_fit <- randomForest(
       HighHost ~ .,
       data = train_fold,
-      mtry = this_mtry,
-      ntree = this_ntree,
-      nodesize = this_nodesize
+      mtry = i_mtry,
+      ntree = i_ntree,
+      nodesize = i_nodesize
     )
     
     prob_yes <- predict(rf_fit, newdata = valid_fold, type = "prob")[, "Yes"]
@@ -411,9 +409,9 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   }
   #save each hyperparameter 10-f cv result
   data.frame(
-    mtry = this_mtry,
-    ntree = this_ntree,
-    nodesize = this_nodesize,
+    mtry = i_mtry,
+    ntree = i_ntree,
+    nodesize = i_nodesize,
     mean_auc = mean(fold_auc),
     sd_auc = sd(fold_auc))
 })
@@ -763,12 +761,12 @@ if (file.exists(randomForestMetricsFile)) {
 #redo 10-f cv to calculate auc
 rf_outoffold_prob <- numeric(nrow(trainData))
 
-foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+fold <- sample(rep(1:10, length.out = nrow(trainData)))
 
 for (k in 1:10) {
   
-  train_fold <- trainData[foldid != k,]
-  valid_fold <- trainData[foldid == k,]
+  train_fold <- trainData[fold != k,]
+  valid_fold <- trainData[fold == k,]
 
   rf_model <- randomForest(
     HighHost ~ .,
@@ -778,7 +776,7 @@ for (k in 1:10) {
     nodesize = rfResults$nodesize[which.max(rfResults$mean_auc)]
   )
   
-  rf_outoffold_prob[foldid == k] <- predict(
+  rf_outoffold_prob[fold == k] <- predict(
     rf_model, newdata = valid_fold, type = "prob")[,"Yes"]
 }
 
