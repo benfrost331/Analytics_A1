@@ -1126,7 +1126,7 @@ FN$actual <- y_test_true[rf_test_pred == "No" & y_test_true == "Yes"]
 FN$predicted <- rf_test_pred[rf_test_pred == "No" & y_test_true == "Yes"]
 FN$pred_prob_yes <- rf_test_prob[rf_test_pred == "No" & y_test_true == "Yes"]
 
-set.seed(2004)
+set.seed(100)
 
 FP_5 <- FP[sample(nrow(FP), 5), ]
 FN_5 <- FN[sample(nrow(FN), 5), ]
@@ -1151,10 +1151,10 @@ FN_5 <- FN[sample(nrow(FN), 5), ]
 #mean(TN$host_acceptance_rate)
 #mean(FN$host_acceptance_rate)
 
-mean(TP$price)
-mean(FP$price)
-mean(TN$price)
-mean(FN$price)
+mean(TP$host_since_days)
+mean(FP$host_since_days)
+mean(TN$host_since_days)
+mean(FN$host_since_days)
 
 FP_5
 FN_5
@@ -1162,8 +1162,8 @@ FN_5
 
 ```
 
-Listings that were predicted to be "HighHosts" (True positives and False positives) tended to have lower review score ratings, and listings that were predicted to not be "HighHosts" had higher ones. This trend was notices in our 5 random False Positives and False Negatives. The lower review scores rating caused these False Positives to be misclassified as "HighHosts" when they were not, and the higher review scores in the False negatives case caused them to be misclassified as not being "HighHost" listings when they in fact were.
+Listings that were predicted to be "HighHosts" (True positives and False positives) tended to have lower review_scores_rating, and listings that were predicted to not be "HighHosts" had higher ones. This trend was notices in our 5 random False Positives and False Negatives. The lower review_scores_rating caused these False Positives to be misclassified as "HighHosts" when they were not, and the higher review_scores_rating in the False negatives case caused them to be misclassified as not being "HighHost" listings when they in fact were.
 
-There is also a trend for the host acceptance rate to cause misclassifications. Positive classifications tend to be for those listings that have higher host acceptance rates, while negative classifications are those with lower host acceptance rates. As we can see in our 5 random False positives and False negatives, the False positives were incorrectly classified due in part to having higher host acceptance rates (which the positive cases have), while the False negative cases were misclassified because their host acceptance rate was particularly low.
+There is also a trend for the host_acceptance_rate to cause misclassifications. Positive classifications tend to be for those listings that have higher host_acceptance_rate, while negative classifications are those with lower host_acceptance_rate. As we can see in our 5 random False positives and False negatives, the False positives were incorrectly classified due in part to having higher host_acceptance_rate (which the positive cases have), while the False negative cases were misclassified because their host_acceptance_rate was particularly low.
 
-Price also seems to show a bit of a pattern with respects to misclassifications. Cases that are classified as positive for being a "HighHost", tend to have higher listings prices, and those that are not classified at "HighHosts" tend to have lower listings prices. The false positives have a higher price, and this could be part of the reason why they were misclassified as "HighHosts" when they are not. The false negatives have lower prices than expected for "HighHosts", and are misclassified into not being a "HighHost".
+Host_since_days also seems to show a pattern with respects to misclassifications. Cases that are classified as positive for being a "HighHost", tend to have a higher host_since_days, and those that are not classified at "HighHosts" tend to have a lower host_since_days. The false positives have a higher number host_since_days, and this could be part of the reason why they were misclassified as "HighHosts" when they are not. The false negatives have lower host_since_days than expected for "HighHosts", and are misclassified into not being a "HighHost".

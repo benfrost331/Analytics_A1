@@ -21,6 +21,7 @@ library(vip)
 library(grid)
 library(gridExtra)
 library(kableExtra)
+library(knitr)
 ```
 
 ```{r, echo = FALSE}
@@ -42,7 +43,6 @@ trainIndex <- sample(seq_len(n), size = floor(0.8 * n))
 trainDataC <- listings |> dplyr::slice(trainIndex)
 testDataC  <- listings |> dplyr::slice(-trainIndex)
 ```
-
 
 ```{r}
 hostUniqueTrain <- trainDataC |>
@@ -83,8 +83,6 @@ ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
 ```
 
 ```{r}
-library(dplyr)
-library(knitr)
 
 hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
@@ -269,10 +267,10 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
     type.measure = "auc",
     trace.it = FALSE
   )
-  index <- which.min(abs(elasticNetFits$lambda - elasticNetFits$lambda.min))
+  index <- which.min(abs(elasticNetFits$lambda - elasticNetFits$lambda.min)) #Smallest auroc for lambda value index
   
   coeficients <- coef(elasticNetFits, s = "lambda.min")
-  n_nonzero <- sum(as.vector(coeficients)[-1] != 0) 
+  n_nonzero <- sum(as.vector(coeficients)[-1] != 0) #number of predictors still not equal to zero
   
   list(
     fit = elasticNetFits,
@@ -282,8 +280,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
       se = elasticNetFits$cvsd[index],
       lambda_min = elasticNetFits$lambda.min,
       lambda_1se = elasticNetFits$lambda.1se,
-      n_nonzero = n_nonzero
-  )
+      n_nonzero = n_nonzero) #summary of results
 })
   
 
@@ -296,15 +293,15 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
   best_auc <- elasticNetResults$auc[best_index_EN] 
   best_se <- elasticNetResults$se[best_index_EN]
   
-  elasticNetModel <- glmnetUtils::cv.glmnet(
+  elasticNetModel <- glmnetUtils::cv.glmnet( 
     HighHost ~ .,
     data = trainData,
     family = "binomial",
     alpha = best_alpha_EN,       
     nfolds = 10,
     type.measure = "auc",
-    trace.it = TRUE
-  )
+    trace.it = TRUE 
+  ) #fitting model with best tuned parameter
   
   
   save(elasticNetResults, file = elasticNetResultsFile)
@@ -321,13 +318,15 @@ plot(elasticNetResults$alpha, elasticNetResults$auc,
 
 index_en <- which.max(elasticNetResults$auc)
 
-#veritcal line
+index_en <- which.max(elasticNetResults$auc)
+
+#veritcal dot line
 x_left <- par("usr")[1]
 segments(x0 = x_left, y0 = elasticNetResults$auc[index_en],
          x1 = elasticNetResults$alpha[index_en],               y1 = elasticNetResults$auc[index_en],
          lty = 3)
 
-#horizontal line
+#horizontal dot line
 y_bottom <- par("usr")[3]
 segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
          x1 = elasticNetResults$alpha[index_en], y1 = elasticNetResults$auc[index_en],
@@ -335,6 +334,7 @@ segments(x0 = elasticNetResults$alpha[index_en], y0 = y_bottom,
 
 points(elasticNetResults$alpha[index_en], elasticNetResults$auc[index_en], pch = 19, col = "gold",) 
 
+#optimal point label
 text(x = elasticNetResults$alpha[index_en],
      y = y_bottom,
      labels = paste0(elasticNetResults$alpha[index_en]),
@@ -346,7 +346,8 @@ text(x = elasticNetResults$alpha[index_en],
 
 print(elasticNetModel)
 coef(elasticNetModel, s = "lambda.min")
-plot(elasticNetModel, ylab = "AUROC", cex.lab = 1.5) #check werid plateau at 1 factor
+
+plot(elasticNetModel, ylab = "AUROC", cex.lab = 1.5)
 ```
 
 ```{r, echo = FALSE}
@@ -368,8 +369,10 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
 
   set.seed(2026)
   
-  foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+  #folds for cv
+  fold <- sample(rep(1:10, length.out = nrow(trainData)))
   
+  #number of parameters
   p <- ncol(trainData) - 1
   
   mtry_grid <- c(2,4,6,8,10,12)
@@ -384,29 +387,31 @@ if (file.exists(randomForestFile) && file.exists(rfResultsFile)) {
     nodesize = nodesize_grid
     )      
   
-  
+#loop for each combination of hyperparameters  
 rfResults <- lapply(1:nrow(rfGrid), function(i) {
-  this_mtry     <- rfGrid$mtry[i]
-  this_ntree    <- rfGrid$ntree[i]
-  this_nodesize <- rfGrid$nodesize[i]
+  i_mtry     <- rfGrid$mtry[i]
+  i_ntree    <- rfGrid$ntree[i]
+  i_nodesize <- rfGrid$nodesize[i]
   
   fold_auc <- numeric(10)
   
+  #loop for each cv fold
   for (k in 1:10) {
     
-    train_fold <- trainData[foldid != k, ]
-    valid_fold <- trainData[foldid == k, ]
+    train_fold <- trainData[fold != k, ]
+    valid_fold <- trainData[fold == k, ]
     
     rf_fit <- randomForest(
       HighHost ~ .,
       data = train_fold,
-      mtry = this_mtry,
-      ntree = this_ntree,
-      nodesize = this_nodesize
+      mtry = i_mtry,
+      ntree = i_ntree,
+      nodesize = i_nodesize
     )
     
     prob_yes <- predict(rf_fit, newdata = valid_fold, type = "prob")[, "Yes"]
     
+    #cv auroc 
     fold_auc[k] <- as.numeric(
       auc(
         roc(response = valid_fold$HighHost,
@@ -414,11 +419,11 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
             levels = c("No", "Yes"),
             direction = "<")))
   }
-  
+  #save each hyperparameter 10-f cv result
   data.frame(
-    mtry = this_mtry,
-    ntree = this_ntree,
-    nodesize = this_nodesize,
+    mtry = i_mtry,
+    ntree = i_ntree,
+    nodesize = i_nodesize,
     mean_auc = mean(fold_auc),
     sd_auc = sd(fold_auc))
 })
@@ -426,7 +431,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   rfResults <- do.call(rbind, rfResults)
   
 
- 
+  #chosen best model after interpreting following plots
   best_model_rf <- data.frame(
     mtry = 4,
     ntrees = 200,
@@ -435,6 +440,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   
   save(rfResults, file = rfResultsFile)
   
+  #best model
   randomForestModel <- randomForest(
     HighHost ~ .,
     data = trainData,
@@ -449,7 +455,6 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
   save(randomForestModel, file = randomForestFile)
   
   
-#  save(randomForestModel, file = randomForestFile)
 }
 ```
 
@@ -457,6 +462,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
 
 library(ggplot2)
 
+#chosen best point
 chosenPoint <- data.frame(
   mtry = 4,
   ntree = 200,
@@ -469,6 +475,7 @@ chosenPoint <- merge(
   by = c("mtry", "ntree", "nodesize")
 )
 
+#plot results with point at chosen point
 ggplot(rfResults, aes(x = ntree, y = mean_auc,
                       colour = factor(nodesize),
                       group = factor(nodesize))) +
@@ -487,12 +494,13 @@ ggplot(rfResults, aes(x = ntree, y = mean_auc,
   facet_wrap(~ mtry, scales = "fixed", labeller = label_both) +
   labs(
     x = "Number of Trees",
-    y = "AUROC",
+    y = "Mean CV AUROC",
     colour = "Node Size",
   ) +
   theme_minimal()
 
 
+#OOB Error by number of trees
 plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", ylab = "OOB Error", col = "blue", lwd = 2, ylim = c(0, max(randomForestModel$err.rate[, "OOB"])), main = "Random Forest Model: OOB Error vs Number of Trees")
 #print(randomForestModel)
 #importance(randomForestModel)
@@ -730,6 +738,7 @@ ggplot(
 
 ```{r, echo = FALSE}
 
+#best lambda value by auc for our chosen alpha value
 index_lambda_en <- which.min(abs(elasticNetModel$lambda-elasticNetModel$lambda.min))
 
 en_outoffold_prob <- elasticNetModel$fit.preval[,index_lambda_en]
@@ -743,6 +752,7 @@ FP_EN <- sum(en_outoffold_pred == 1 & y_true_en == 0)
 FN_EN <- sum(en_outoffold_pred == 0 & y_true_en == 1)
 
 
+#EN metrics
 Accuracy_EN <- (TP_EN + TN_EN)/length(y_true_en)
 Precision_EN <- TP_EN/(TP_EN + FP_EN)
 Recall_EN <- TP_EN/(TP_EN + FN_EN)
@@ -773,15 +783,15 @@ if (file.exists(randomForestMetricsFile)) {
 } else {
 
 
-
+#redo 10-f cv to calculate auc
 rf_outoffold_prob <- numeric(nrow(trainData))
 
-foldid <- sample(rep(1:10, length.out = nrow(trainData)))
+fold <- sample(rep(1:10, length.out = nrow(trainData)))
 
 for (k in 1:10) {
   
-  train_fold <- trainData[foldid != k,]
-  valid_fold <- trainData[foldid == k,]
+  train_fold <- trainData[fold != k,]
+  valid_fold <- trainData[fold == k,]
 
   rf_model <- randomForest(
     HighHost ~ .,
@@ -791,7 +801,7 @@ for (k in 1:10) {
     nodesize = rfResults$nodesize[which.max(rfResults$mean_auc)]
   )
   
-  rf_outoffold_prob[foldid == k] <- predict(
+  rf_outoffold_prob[fold == k] <- predict(
     rf_model, newdata = valid_fold, type = "prob")[,"Yes"]
 }
 
@@ -799,6 +809,7 @@ for (k in 1:10) {
 rf_outoffold_pred <- ifelse(rf_outoffold_prob >= 0.5, 1, 0)
 y_true_rf <- ifelse(trainData$HighHost == "Yes", 1, 0)
 
+#rf metrics
 TP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 1)
 TN_RF <- sum(rf_outoffold_pred == 0 & y_true_rf == 0)
 FP_RF <- sum(rf_outoffold_pred == 1 & y_true_rf == 0)
@@ -867,7 +878,7 @@ if (file.exists("knn_all_tuned_objects.RData")) {
   cvPred <- knnCvModel$pred
   
   # Keep only the chosen tuning row
-  cvPred <- cvPred %>%
+  cvPred <- cvPred |>
     filter(k == 3)
   
   # Class predictions using tau = 0.5
@@ -956,7 +967,7 @@ if (file.exists("gbm_all_tuned_objects.RData")) {
   cvPred <- gbmCvModel$pred
   
   # If caret returns rows in a different order, keep only the chosen tuning row
-  cvPred <- cvPred %>%
+  cvPred <- cvPred |>
     filter(
       n.trees == 300,
       interaction.depth == 8,
@@ -1011,6 +1022,8 @@ all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
 
 all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
 
+#display all metrics in table in latex
+
 latexTable <- kable(
   all_metrics,
   format = "latex",
@@ -1025,6 +1038,8 @@ cat(latexTable)
 
 metric_long <- pivot_longer(all_metrics, cols = -Model, names_to = "Metric", values_to = "Value")
 
+
+#display all metrics in table in quarto
 ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
   geom_col(position = "dodge") +
   ylim(0,1) +
@@ -1042,7 +1057,7 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
 
 ## Question 3:
 
-###a)
+### a)
 
 ```{r, echo = FALSE}
 if (file.exists("tauTuningObjects.RData")) {
@@ -1145,7 +1160,7 @@ ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
   )
 ```
 
-###b)
+### b)
 
 ```{r, echo = FALSE}
 cvRoc <- pROC::roc(
@@ -1285,8 +1300,7 @@ round(testMetricTable, 4)
 ```
 
 ```{r, echo = FALSE}
-library(dplyr)
-library(knitr)
+
 
 comparisonTable <- bind_rows(
   `CV at Optimal Tau` = cvMetricTable,
@@ -1327,13 +1341,14 @@ save(
 )
 ```
 
-### Question 4
+## Question 4
 
-###a)
+### a)
 
 ```{r, echo = FALSE}
 load("randomForestModel.RData")
 
+#variable importance plot for rf
 vip(randomForestModel, num_features = 28) +
   labs(title = NULL,
        x = NULL,
@@ -1344,6 +1359,7 @@ vip(randomForestModel, num_features = 28) +
 
 ```{r, echo = FALSE}
 
+#load partial dependance plots
 if (file.exists("pdp_plots.png")) {
   knitr::include_graphics("pdp_plots.png") 
 } else {
@@ -1382,8 +1398,10 @@ if (file.exists("pdp_plots.png")) {
                 grid.resolution = 25,
                 ice = FALSE)
   
+  #turn plots into png for latex
   png("pdp_plots.png", width = 1200, height = 900, res = 150)
   
+  #plot plots for quarto
   grid.arrange(
     pdp::plotPartial(p1, plot.pdp = TRUE, alpha = 0, xlab = "Price", ylab = ""),
     pdp::plotPartial(p2, plot.pdp = TRUE, alpha = 0, xlab = "Host since days", ylab = ""),
@@ -1399,17 +1417,21 @@ if (file.exists("pdp_plots.png")) {
 }
 
 
-## Fix host response time x-axis labels
+
 
 ```
 
+### c)
+
 ```{r, echo = FALSE}
+
 
 rf_test_prob <- predict(randomForestModel, newdata = testData, type = "prob")[, "Yes"]
 rf_test_pred <- ifelse(rf_test_prob >= 0.5, "Yes", "No")
 
 y_test_true <- as.character(testData$HighHost)
 
+#categorise all different observations&predictions
 FP <- testData[rf_test_pred == "Yes" & y_test_true == "No", ]
 FN <- testData[rf_test_pred == "No" & y_test_true == "Yes", ]
 
@@ -1426,9 +1448,12 @@ FN$pred_prob_yes <- rf_test_prob[rf_test_pred == "No" & y_test_true == "Yes"]
 
 set.seed(2004)
 
+#sample random FP and FN
 FP_5 <- FP[sample(nrow(FP), 5), ]
 FN_5 <- FN[sample(nrow(FN), 5), ]
 
+
+#just looking at some basic trends in misclassifications
 #mean(TP$price)
 #mean(FP$price)
 #mean(TN$price)
