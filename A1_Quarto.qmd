@@ -45,6 +45,7 @@ testDataC  <- listings |> dplyr::slice(-trainIndex)
 ```
 
 ```{r}
+# x Value Comparison:
 hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
 
@@ -83,7 +84,7 @@ ggplot(imbalanceLong, aes(x = x, y = Percentage, colour = Class)) +
 ```
 
 ```{r}
-
+# Class Imbalances for x=2:
 hostUniqueTrain <- trainDataC |>
   distinct(host_id, host_listings_count)
 
@@ -123,6 +124,7 @@ $$
 $$
 
 ```{r echo = FALSE}
+# Creation of HighHost:
 hostCutoff = 2
 
 # Binary Response: 1 = Yes, 0 = No
@@ -137,7 +139,7 @@ listings <- listings |>
 ### a)
 
 ```{r echo = FALSE}
-# Training & Test Set Split With HighHost
+# Training & Test Set Split With HighHost:
 set.seed(2026)
 
 n <- nrow(listings)
@@ -147,9 +149,8 @@ trainData <- listings |> dplyr::slice(trainIndex)
 testData  <- listings |> dplyr::slice(-trainIndex)
 ```
 
-```{r, echo = false}
-library(ggplot2)
-
+```{r, echo = FALSE}
+# Location vs Ward Plot:
 ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward)) +
   geom_point(size = 1, alpha = 0.6) +
   labs(
@@ -168,7 +169,6 @@ ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward))
 
 ```{r echo = FALSE}
 # Remove id (Useless), host_id (Target Leakage Prevention) neighbourhood_ward (Collinear With Longitude & Latitude and Problematic):
-
   trainData <- trainData |>
     select(-id, -host_id, -neighbourhood_ward)
   
@@ -245,6 +245,7 @@ ggplot(trainData, aes(x = longitude, y = latitude, colour = neighbourhood_ward))
 #### Regularised Elastic-Net Logistic Regression:
 
 ```{r, echo = FALSE}
+# Regularised Elastic-Net Logistic Regression Tuning:
   elasticNetResultsFile <- "elasticNetResults.RData"
   elasticNetFile <- "elasticNetModel.RData"
 
@@ -310,6 +311,7 @@ elasticNetResults <- lapply(alphaGrid, function(a) {
 ```
 
 ```{r, echo = FALSE}
+# Regularised Elastic-Net Logistic Regression Tuning Plots:
 plot(elasticNetResults$alpha, elasticNetResults$auc,
      type = "l",
      ylab = "AUROC",
@@ -351,6 +353,7 @@ plot(elasticNetModel, ylab = "AUROC", cex.lab = 1.5)
 ```
 
 ```{r, echo = FALSE}
+# Make HighHost a Factor:
 trainData$HighHost <- factor(trainData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No", "Yes"))
 ```
@@ -358,7 +361,7 @@ testData$HighHost  <- factor(testData$HighHost, levels = c(0, 1), labels = c("No
 #### Random Forest:
 
 ```{r, echo = FALSE}
-
+# Random Forest Tuning:
   rfResultsFile <- "rfResults.RData"
   randomForestFile <- "randomForestModel.RData"
 
@@ -459,8 +462,7 @@ rfResults <- lapply(1:nrow(rfGrid), function(i) {
 ```
 
 ```{r, echo = FALSE}
-
-library(ggplot2)
+# Random Forest Tuning Plot:
 
 #chosen best point
 chosenPoint <- data.frame(
@@ -510,6 +512,7 @@ plot(randomForestModel$err.rate[, "OOB"], type = "l", xlab = "Number of Trees", 
 #### GBM Boosted Tree Model:
 
 ```{r, echo = FALSE}
+# GBM Tuning:
 if (file.exists("gbmTuningObjects.RData")) {
   load("gbmTuningObjects.RData")
 } else {
@@ -548,6 +551,7 @@ if (file.exists("gbmTuningObjects.RData")) {
 ```
 
 ```{r, echo = FALSE}
+# GBM Tuning Plot:
 load("gbmTuningObjects.RData")
 
 chosenPoint <- data.frame(
@@ -603,6 +607,7 @@ ggplot(
 #### K-Nearest Neighbours Model:
 
 ```{r, echo = FALSE}
+# Variable Relative Importance Plot:
 load("gbm_all_objects.RData")
 importanceTable <- summary(gbmModel, n.trees = 300, plotit = FALSE)
 
@@ -623,7 +628,7 @@ barplot(
 ```
 
 ```{r echo = FALSE}
-# K-NEAREST NEIGHBOURS FITTING:
+# KNN Tuning:
 
 featureSets <- list(
   
@@ -695,7 +700,7 @@ if (file.exists("knn_all_objects.RData")) {
 ```
 
 ```{r echo = FALSE}
-# K-NEAREST NEIGHBOURS TUNING:
+# KNN Tuning Plot:
 load("knn_all_objects.RData")
 
 chosenPoint <- data.frame(
@@ -737,7 +742,7 @@ ggplot(
 #### 5 Model Performance Metric Summary:
 
 ```{r, echo = FALSE}
-
+# EN R Performance Metric Calculations:
 #best lambda value by auc for our chosen alpha value
 index_lambda_en <- which.min(abs(elasticNetModel$lambda-elasticNetModel$lambda.min))
 
@@ -775,7 +780,7 @@ EN_Results <- data.frame(
 ```
 
 ```{r, echo = FALSE}
-
+# RF Performance Metric Calculations:
 randomForestMetricsFile <- "randomForestMetrics.RData"
 
 if (file.exists(randomForestMetricsFile)) {
@@ -841,6 +846,7 @@ save(RF_Results, file = randomForestMetricsFile)
 ```
 
 ```{r, echo = FALSE}
+# KNN Performance Metric Calculations:
 if (file.exists("knn_all_tuned_objects.RData")) {
   load("knn_all_tuned_objects.RData")
 } else {
@@ -931,6 +937,7 @@ knnMetricTable <- data.frame(
 ```
 
 ```{r, echo = FALSE}
+# GBM Performance Metric Calculations:
 if (file.exists("gbm_all_tuned_objects.RData")) {
   load("gbm_all_tuned_objects.RData")
 } else {
@@ -1017,6 +1024,7 @@ gbmMetricTable <- data.frame(
 ```
 
 ```{r, echo = FALSE}
+# Performance Metric Table Output:
 
 all_metrics <- rbind(EN_Results, RF_Results, gbmMetricTable, knnMetricTable)
 
@@ -1060,6 +1068,7 @@ ggplot(metric_long, aes(x = Metric, y = Value, fill = Model)) +
 ### a)
 
 ```{r, echo = FALSE}
+# Tau Tuning Set Up:
 if (file.exists("tauTuningObjects.RData")) {
   load("tauTuningObjects.RData")
 } else {
@@ -1099,6 +1108,7 @@ if (file.exists("tauTuningObjects.RData")) {
 ```
 
 ```{r, echo = FALSE}
+# Metric Calculation Given Tau Set Up:
 metricAtTau <- function(obs, probYes, tau) {
   
   predClass <- ifelse(probYes >= tau, "Yes", "No")
@@ -1123,6 +1133,7 @@ metricAtTau <- function(obs, probYes, tau) {
 ```
 
 ```{r, echo = FALSE}
+# Tau Tuning:
 tauGrid <- seq(0.01, 0.99, by = 0.01)
 
 cvTauResults <- do.call(
@@ -1135,6 +1146,7 @@ bestTauRow
 ```
 
 ```{r, echo = FALSE}
+# F1 vs Tau Plot:
 ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
   geom_line(linewidth = 1) +
   geom_vline(xintercept = bestTauRow$tau, linetype = "dashed", colour = "black") +
@@ -1163,6 +1175,7 @@ ggplot(cvTauResults, aes(x = tau, y = F1.Score)) +
 ### b)
 
 ```{r, echo = FALSE}
+# ROC Set Up:
 cvRoc <- pROC::roc(
   response = cvPred$obs,
   predictor = cvPred$probYes,
@@ -1189,6 +1202,7 @@ bestPoint <- data.frame(
 ```
 
 ```{r, echo = FALSE}
+# ROC Plot:
 ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
   geom_line(linewidth = 1) +
   geom_abline(intercept = 0, slope = 1, linetype = "dotted", colour = "grey50") +
@@ -1227,6 +1241,7 @@ ggplot(rocCoords, aes(x = 1 - Specificity, y = Sensitivity)) +
 ### c)
 
 ```{r, echo = FALSE}
+# Best Tau Metric Table:
 cvAUC <- as.numeric(cvRoc$auc)
 
 cvMetricTable <- data.frame(
@@ -1242,6 +1257,7 @@ round(cvMetricTable, 4)
 ```
 
 ```{r, echo = FALSE}
+# Fitting Final Model:
 if (file.exists("finalRFModel.RData")) {
   load("finalRFModel.RData")
 } else {
@@ -1261,6 +1277,7 @@ if (file.exists("finalRFModel.RData")) {
 ```
 
 ```{r, echo = FALSE}
+# Testing Final Model:
 testProb <- predict(
   finalRfModel,
   newdata = testData,
@@ -1272,6 +1289,7 @@ testPredClass <- factor(testPredClass, levels = c("No", "Yes"))
 ```
 
 ```{r, echo = FALSE}
+# Final Model Results:
 testCm <- confusionMatrix(
   data = testPredClass,
   reference = testData$HighHost,
@@ -1300,8 +1318,7 @@ round(testMetricTable, 4)
 ```
 
 ```{r, echo = FALSE}
-
-
+# Result Comparison in Table:
 comparisonTable <- bind_rows(
   `CV at Optimal Tau` = cvMetricTable,
   `Test at Optimal Tau` = testMetricTable,
@@ -1322,10 +1339,12 @@ cat(latexTable)
 ```
 
 ```{r, echo = FALSE}
+# Best Tau Output:
 cat("Best Tau:",round(bestTau, 4))
 ```
 
 ```{r, echo = FALSE}
+# Saving:
 save(
   cvPred,
   cvTauResults,
@@ -1346,9 +1365,9 @@ save(
 ### a)
 
 ```{r, echo = FALSE}
+# Variable Importance Plot:
 load("randomForestModel.RData")
 
-#variable importance plot for rf
 vip(randomForestModel, num_features = 28) +
   labs(title = NULL,
        x = NULL,
@@ -1358,8 +1377,7 @@ vip(randomForestModel, num_features = 28) +
 ### b)
 
 ```{r, echo = FALSE}
-
-#load partial dependance plots
+# Partial Dependence Plots:
 if (file.exists("pdp_plots.png")) {
   knitr::include_graphics("pdp_plots.png") 
 } else {
@@ -1424,8 +1442,7 @@ if (file.exists("pdp_plots.png")) {
 ### c)
 
 ```{r, echo = FALSE}
-
-
+# Error Exploration Table:
 rf_test_prob <- predict(randomForestModel, newdata = testData, type = "prob")[, "Yes"]
 rf_test_pred <- ifelse(rf_test_prob >= 0.5, "Yes", "No")
 

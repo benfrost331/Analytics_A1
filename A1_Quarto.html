@@ -103,54 +103,85 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 </header>
 
-<section id="introduction" class="level2">
-<h2 class="anchored" data-anchor-id="introduction">Introduction:</h2>
-<p>The following report presents a supervised learning analysis of Airbnb listing data for the city of Cape Town. Based on any given listing observation the analysis aims to predict whether or not a host leases more than a threshold number of properties on Airbnb in which case they are termed a ‘High Host’ and explore this response’s potential housing-market impact. Using a curated 2025 dataset of listings, this analysis develops and compares several classification models in order to identify patterns in listing characteristics that are associated with whether or not its host is considered a ‘High Host’.</p>
-<p>The analysis follows a structured predictive modelling workflow. The data are first divided into training and test sets so that model development and out of sample performance evaluation remain separate. The decision rule for what constitutes a ‘High Host’ is then derived and defined with the property number threshold being determined using the training data. Several classification models are subsequently fitted and tuned, the models types include elastic-net logistic regression, random forest, boosted trees and k-nearest neighbours. Their performance is compared using 10-fold cross-validation and a common set of evaluation metrics.</p>
-<p>Beyond model comparison, this report also considers decision-threshold optimisation, since the best threshold number of properties for classification may differ from the default value when the objective is to improve the F1 score. The best performing model is selected and then interpreted using variable-importance and effect plots. Additionally, its prediction errors are examined through false-positive and false-negative cases. This report aims not only to assess predictive performance but also to demonstrate interpretable modelling processes.</p>
-</section>
 <section id="question-1" class="level2">
 <h2 class="anchored" data-anchor-id="question-1">Question 1:</h2>
 <section id="target-variable-creation" class="level3">
 <h3 class="anchored" data-anchor-id="target-variable-creation">Target Variable Creation:</h3>
-<p>This project will be modelling the binary target variable fitted to the Host Listings Count, the number of listings the host has (per Airbnb unknown calculations), above some variable to be defined, x.</p>
-<p>There have been concerns in Cape Town regarding the massive influx of Airbnb short term rentals, which have had effects on the affordability and availability of long term-rentals. This binary target variable aims to discover what factors can describe listings that are attractive to professional Airbnb hosts who have portfolios of listings.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(knitr)</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>hostUniqueTrain <span class="ot">&lt;-</span> trainDataC <span class="sc">|&gt;</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(host_id, host_listings_count)</span>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># x Value Comparison:</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>hostUniqueTrain <span class="ot">&lt;-</span> trainDataC <span class="sc">|&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(host_id, host_listings_count)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>xValues <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>HHtrain <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">mean</span>(hostUniqueTrain<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>) <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>nHHtrain <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">-</span> HHtrain, <span class="dv">2</span>)</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>hostUniqueTest <span class="ot">&lt;-</span> testDataC <span class="sc">|&gt;</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(host_id, host_listings_count)</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>HHtest <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">mean</span>(hostUniqueTest<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>) <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>nHHtest <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">-</span> HHtest, <span class="dv">2</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>imbalanceByX <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> xValues,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">HighHost =</span> <span class="fu">sapply</span>(xValues, <span class="cf">function</span>(x) {</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mean</span>(hostUniqueTrain<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> x) <span class="sc">*</span> <span class="dv">100</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  })</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>imbalanceByX<span class="sc">$</span>Not_HighHost <span class="ot">&lt;-</span> <span class="dv">100</span> <span class="sc">-</span> imbalanceByX<span class="sc">$</span>HighHost</span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>imbalanceTable <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">Dataset =</span> <span class="fu">c</span>(<span class="st">"Training"</span>, <span class="st">"Test"</span>),</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">HighHost =</span> <span class="fu">c</span>(HHtrain, HHtest),</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">Not_HighHost =</span> <span class="fu">c</span>(nHHtrain, nHHtest)</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>latexTable <span class="ot">&lt;-</span> <span class="fu">kable</span>(</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  imbalanceTable,</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="st">"Class imbalance for x = 2 on the training and test data"</span>,</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">"Dataset"</span>, <span class="st">"HighHost (%)"</span>, <span class="st">"Not HighHost (%)"</span>),</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">format =</span> <span class="st">"latex"</span>,</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>  <span class="at">booktabs =</span> <span class="cn">TRUE</span>,</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>  <span class="at">align =</span> <span class="fu">c</span>(<span class="st">"l"</span>, <span class="st">"c"</span>, <span class="st">"c"</span>)</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(latexTable)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>imbalanceLong <span class="ot">&lt;-</span> imbalanceByX <span class="sc">|&gt;</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="at">cols =</span> <span class="fu">c</span>(HighHost, Not_HighHost),</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>               <span class="at">names_to =</span> <span class="st">"Class"</span>,</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>               <span class="at">values_to =</span> <span class="st">"Percentage"</span>)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(imbalanceLong, <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> Percentage, <span class="at">colour =</span> Class)) <span class="sc">+</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>) <span class="sc">+</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"x"</span>,</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Percentage"</span>,</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"Classification"</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.title =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">16</span>),</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>    <span class="at">axis.text =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">14</span>),</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.title =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">16</span>),</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">legend.text =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">14</span>)</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Class Imbalances for x=2:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>hostUniqueTrain <span class="ot">&lt;-</span> trainDataC <span class="sc">|&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(host_id, host_listings_count)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>HHtrain <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">mean</span>(hostUniqueTrain<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>) <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>nHHtrain <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">-</span> HHtrain, <span class="dv">2</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>hostUniqueTest <span class="ot">&lt;-</span> testDataC <span class="sc">|&gt;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">distinct</span>(host_id, host_listings_count)</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>HHtest <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="fu">mean</span>(hostUniqueTest<span class="sc">$</span>host_listings_count <span class="sc">&gt;</span> <span class="dv">2</span>) <span class="sc">*</span> <span class="dv">100</span>, <span class="dv">2</span>)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>nHHtest <span class="ot">&lt;-</span> <span class="fu">round</span>(<span class="dv">100</span> <span class="sc">-</span> HHtest, <span class="dv">2</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>imbalanceTable <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">Dataset =</span> <span class="fu">c</span>(<span class="st">"Training"</span>, <span class="st">"Test"</span>),</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">HighHost =</span> <span class="fu">c</span>(HHtrain, HHtest),</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">Not_HighHost =</span> <span class="fu">c</span>(nHHtrain, nHHtest)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>latexTable <span class="ot">&lt;-</span> <span class="fu">kable</span>(</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  imbalanceTable,</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="st">"Class imbalance for x = 2 on the training and test data"</span>,</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">col.names =</span> <span class="fu">c</span>(<span class="st">"Dataset"</span>, <span class="st">"HighHost (%)"</span>, <span class="st">"Not HighHost (%)"</span>),</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>  <span class="at">format =</span> <span class="st">"latex"</span>,</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>  <span class="at">booktabs =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">align =</span> <span class="fu">c</span>(<span class="st">"l"</span>, <span class="st">"c"</span>, <span class="st">"c"</span>)</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(latexTable)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>\begin{table}
 
-\caption{\label{tab:unnamed-chunk-4}Class imbalance for x = 2 on the training and test data}
+\caption{\label{tab:unnamed-chunk-5}Class imbalance for x = 2 on the training and test data}
 \centering
 \begin{tabular}[t]{lcc}
 \toprule
@@ -170,22 +201,25 @@ Test &amp; 40.42 &amp; 59.58\\
 0 &amp; \text{otherwise}
 \end{cases}
 \]</span></p>
-<p>We have chosen to use 2 to be the threshold value used to define the binary target variable. This is appropriate as 27.4% of our training data shows hosts with more than 2 listings, and this is an indication of whether the host owns a portfolio of properties or if they are just listing their primary or secondary property.</p>
 </section>
 </section>
 <section id="question-2" class="level2">
 <h2 class="anchored" data-anchor-id="question-2">Question 2:</h2>
 <section id="a" class="level3">
 <h3 class="anchored" data-anchor-id="a">a)</h3>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
 <section id="data-pre-processing" class="level4">
 <h4 class="anchored" data-anchor-id="data-pre-processing">Data Pre-Processing:</h4>
 </section>
 <section id="regularised-elastic-net-logistic-regression" class="level4">
 <h4 class="anchored" data-anchor-id="regularised-elastic-net-logistic-regression">Regularised Elastic-Net Logistic Regression:</h4>
-<p>REGULARISED ELASTIC-NET LOGISTIC REGRESSION INSPECTION:</p>
 <div class="cell">
 <div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid" width="672"></p>
 </div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Call:
@@ -240,102 +274,41 @@ has_phone_verification                5.489259e+00
 has_work_email_verification           5.227214e-01</code></pre>
 </div>
 <div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-9-2.png" class="img-fluid" width="672"></p>
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-11-2.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>The Regularised Elastic-Net Regression Model was used as a binary classification model for predicting whether a listing is a high host or not. Logistic regression was appropriate here because the response variable is binary, and it models the probability that an observation belongs to a class using the log-odds function. With a large set of predictors, ordinary logistic regression may over-fit. This is addressed by regularization, through the elastic-net penalty.</p>
-<p>The elastic-net penalty combines the L1 (lasso) and L2 (ridge) penalties. The lasso component performs variable selection, shrinking some coefficients exactly to zero, while the ridge component shrinks coefficients to zero without necessarily removing them. Elastic-net is thus a useful combination of lasso and ridge regression.</p>
-<p>We used the training set to fit our model, where we tuned the model to the two hyper-parameters: α, which controls the balance between ridge and lasso penalization, and λ, which controls the level of the penalty.</p>
-<p>To tune the model we searched over the range of <span class="math inline">\(α \in (0,1)\)</span>, with step sizes of 0.01. For each value, a 10-fold cross validated elastic-net regression model was fitted, and the corresponding best λ value was selected internally in the function. We then compared each model corresponding to each α value (which had been tuned to its best λ value), and we picked our α value, and its corresponding λ value based off the best performing AUROC value (the largest).</p>
-<p>The optimal alpha value that we chose was α = 0.23, and the corresponding lambda value of λ = 0.0001935441, and we then refitted the final elastic-net model on the training set with this chosen α value and its corresponding optimal λ.</p>
-<p>CONVERTING HighHost TO BE A FACTOR:</p>
 </section>
 <section id="random-forest" class="level4">
 <h4 class="anchored" data-anchor-id="random-forest">Random Forest:</h4>
-<p>RANDOM FOREST FITTING INSPECTION:</p>
-<div class="cell">
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="672"></p>
-</div>
-<div class="cell-output cell-output-stdout">
-<pre><code>
-Call:
- randomForest(formula = HighHost ~ ., data = trainData, ntree = best_model_rf$ntree,      mtry = best_model_rf$mtry, nodesize = best_model_rf$nodesize,      importance = TRUE, do.trace = 50) 
-               Type of random forest: classification
-                     Number of trees: 200
-No. of variables tried at each split: 4
-
-        OOB estimate of  error rate: 19.1%
-Confusion matrix:
-      No  Yes class.error
-No  2907  759   0.2070376
-Yes  769 3565   0.1774342</code></pre>
-</div>
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-12-2.png" class="img-fluid" width="672"></p>
-</div>
-</div>
-<p>We used a random forest classifier to predict the binary response variable, HighHost. Random Forests are a tree-based method that build a large number of classification trees on bootstrap samples of the training data and then combine their predictions. This approach is useful because it can capture non-linear relationships and interactions between predictors. It is also generally less prone to over fitting than a single decision tree.</p>
-<p>At each split in the tree, only a random subset of predictors are considered. This introduces randomness and reduces correlation between trees, which improves the overall model. Since the outcome is binary, the response variable was treated as a factor so that the model was fitted as a classification forest.</p>
-<p>The model was fitted using the training set only. The hyper-parameters used to tune were:</p>
-<ul>
-<li><p>mtry = the number of predictors randomly chosen at each split</p></li>
-<li><p>ntree = the total number of trees grown in the forest</p></li>
-<li><p>nodesize = the minimum final node size, which dictates how deep the trees grow</p></li>
-</ul>
-<p><span class="math inline">\(mtry \in \{2,4,6,8,10,12\}\)</span></p>
-<p><span class="math inline">\(ntree \in \{100, 200, 300\}\)</span></p>
-<p><span class="math inline">\(nodesize \in \{1,5,10\}\)</span></p>
-<p>This gave a total of <span class="math inline">\(6 \times 3 \times 3 = 54\)</span> different models. The mtry values were chosen to cover values around the default value of approximately <span class="math inline">\(\sqrt{p}\)</span>, where <span class="math inline">\(p\)</span> is the number of predictors. The ntree values were chosen to compare a relatively small, moderate and large forest, and the nodesize values were chosen to allow a comparison between shallower, more moderate and deeper trees.</p>
-<p>Hyper-parameter tuning was performed on 10-fold cross-validation on the training set. For each different combination of hyper-parameters, a new model was trained on 9 folds and the AUROC was calculated on the remaining fold. The mean AUROC across the 10-folds was then used to tune the model. The selected random forest hyper-parameters were then chosen to be: mtry = 12, ntree = 700 and nodesize = 1.</p>
-<p>We can see that the optimal number of trees was on the upper boundary of our tuning Grid, but looking at our plots, we can see that the AUROC with respect to ntree is close to plateaued, so by extending our grid we would not gain much more accuracy. The same can be said for the mtry, as once mtry gets to 8, 10 and 12, the increases in AUROC were small.</p>
-<p>The final random forest model was then refitted on the full training set using these selected hyper-parameters.</p>
-</section>
-<section id="gbm-boosted-tree-model" class="level4">
-<h4 class="anchored" data-anchor-id="gbm-boosted-tree-model">GBM Boosted Tree Model:</h4>
-<p>For the GBM boosted tree model, a gradient boosting classifier with a Bernoulli loss function was fitted to the training data, since the response variable HighHost is binary. The model builds many small decision trees sequentially, with each new tree focusing on correcting the errors made by the previous ensemble. This allows the method to capture non-linear effects and interactions among the predictors while still being tuned in a controlled way.</p>
-<p>Hyperparameter selection was carried out using a grid-search approach on the training set only. For each candidate combination of tuning parameters, a GBM model was fitted with 10-fold cross-validation and model performance was assessed using the cross-validated Bernoulli deviance. The preferred hyperparameter combination was the one that achieved the lowest cross-validated error without risk of overfitting to the training data. After identifying the best combination of values for these hyperparameters the final GBM model has been refitted using these values.</p>
-<p>The hyperparameter search space was:</p>
-<p>n.trees ∈ {500, 750, 1000, 1250, 1500}</p>
-<p>interaction.depth ∈ {3, 5, 8, 10}</p>
-<p>shrinkage ∈ {0.01, 0.05, 0.1}</p>
-<p>n.minobsinnode ∈ {5, 10, 20}</p>
-<p>This gives a total of 6 × 5 × 5 × 3 = 450 hyperparameter combinations evaluated.</p>
-<p>GBM BOOSTED TREE MODEL FITTING:</p>
-<p>GBM BOOSTED TREE MODEL TUNING:</p>
 <div class="cell">
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid" width="672"></p>
 </div>
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-14-2.png" class="img-fluid" width="672"></p>
 </div>
-<p>Although the highest AUROC values were achieved in the more complex regions of the grid, the gains beyond moderate settings were very small. A tuning choice of n.trees = 1000, interaction.depth = 5, shrinkage = 0.05, and n.minobsinnode = 10 was therefore selected as a balanced specification, providing strong predictive performance while avoiding unnecessary additional model complexity.</p>
+</div>
+</section>
+<section id="gbm-boosted-tree-model" class="level4">
+<h4 class="anchored" data-anchor-id="gbm-boosted-tree-model">GBM Boosted Tree Model:</h4>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
 </section>
 <section id="k-nearest-neighbours-model" class="level4">
 <h4 class="anchored" data-anchor-id="k-nearest-neighbours-model">K-Nearest Neighbours Model:</h4>
-<p>For the K-nearest neighbours model, a supervised classification approach was used in which each observation is classified according to the majority class among its k nearest neighbours in the predictor space. Because KNN is distance-based, predictor scaling is important, so all predictors are centred and scaled before model fitting. Model selection was performed on the training set only using 10-fold cross-validation, with the optimal value of k chosen as the one that maximised the cross-validated ROC measure.</p>
-<p>In addition to tuning the number of neighbours, the model has also been tuned over feature subsets. This is done because KNN can be highly sensitive to irrelevant or weak predictors and as a result including too many variables can distort the distance calculation and reduce classification performance. In order to explore and exploit this influence and subset size relationship a series of five different feature sets of increasing size have therefore been considered with each feature’s selection in it being dependent on its Relative Influence as depicted below;</p>
-<div class="cell">
-<div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid" width="672"></p>
-</div>
-</div>
-<p>The feature search space consisted of the following candidate subsets:</p>
-<p>Subset1: host_acceptance_rate, host_response_time, host_since_days</p>
-<p>Subset2: host_acceptance_rate, host_response_time, host_since_days, host_response_rate</p>
-<p>Subset3: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights</p>
-<p>Subset4: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude</p>
-<p>Subset5: host_acceptance_rate, host_response_time, host_since_days, host_response_rate, minimum_nights, latitude, price</p>
-<p>The neighbourhood size search space was:</p>
-<p>k ∈ {3,5,7,…,25}</p>
-<p>So the KNN tuning process searched jointly across 5 candidate feature sets and 12 candidate values of k.</p>
-<p>K-NEAREST NEIGHBOURS INSPECTION:</p>
 <div class="cell">
 <div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
-<p>The KNN model was tuned over alternative feature subsets and values of k. Based on the highest mean cross-validated AUROC. The preferred specification uses the feature set Subset2 which includes host_acceptance_rate, host_response_time, host_since_days and host_response_rate as features. Although performance for this feature set declines gradually as k increases, it remains the strongest overall, indicating that these 4 host-related variables carry the most predictive signal for this classifier.</p>
-<p>Despite the highest mean cross-validated ROC being achieved by the Host feature set at k=1, a slightly larger value such as k=3 should be preferred in practice. This is because k=1 can be highly sensitive to noise and individual observations in the training data, whereas k=3 still delivers very strong predictive performance while providing a more stable and robust classification rule. The final choice therefore balances peak cross-validated accuracy against model stability and reduced sensitivity to local irregularities. The KNN tuning results show that predictive performance is strongest at very small values of k, with AUROC declining as the number of neighbours increases. This suggests that the class structure is highly local and that larger neighbourhood sizes introduce excessive smoothing. The best-performing feature sets were the smaller host-related subsets, while adding further predictors reduced performance, indicating that KNN was sensitive to irrelevant or weakly informative variables. Although the highest AUROC was achieved at k=1, a slightly larger value such as k=3 may be preferred as a more stable specification with very similar performance.</p>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
 </section>
 </section>
 <section id="b" class="level3">
@@ -343,71 +316,28 @@ Yes  769 3565   0.1774342</code></pre>
 <section id="model-performance-metric-summary" class="level4">
 <h4 class="anchored" data-anchor-id="model-performance-metric-summary">5 Model Performance Metric Summary:</h4>
 <div class="cell">
-<div class="cell-output-display">
-<table class="table table-sm table-striped small">
-<caption>CV perfomance metrics</caption>
-<colgroup>
-<col style="width: 22%">
-<col style="width: 13%">
-<col style="width: 13%">
-<col style="width: 14%">
-<col style="width: 10%">
-<col style="width: 17%">
-<col style="width: 9%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">Model</th>
-<th style="text-align: center;">Accuracy</th>
-<th style="text-align: center;">F1 score</th>
-<th style="text-align: center;">Precision</th>
-<th style="text-align: center;">Recall</th>
-<th style="text-align: center;">Specificity</th>
-<th style="text-align: center;">AUROC</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">Elastic Net</td>
-<td style="text-align: center;">0.664</td>
-<td style="text-align: center;">0.640</td>
-<td style="text-align: center;">0.762</td>
-<td style="text-align: center;">0.551</td>
-<td style="text-align: center;">0.797</td>
-<td style="text-align: center;">0.748</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">Random Forest</td>
-<td style="text-align: center;">0.822</td>
-<td style="text-align: center;">0.837</td>
-<td style="text-align: center;">0.833</td>
-<td style="text-align: center;">0.840</td>
-<td style="text-align: center;">0.801</td>
-<td style="text-align: center;">0.902</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">GBM Boosted Tree</td>
-<td style="text-align: center;">0.810</td>
-<td style="text-align: center;">0.825</td>
-<td style="text-align: center;">0.823</td>
-<td style="text-align: center;">0.827</td>
-<td style="text-align: center;">0.789</td>
-<td style="text-align: center;">0.887</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">KNN</td>
-<td style="text-align: center;">0.753</td>
-<td style="text-align: center;">0.790</td>
-<td style="text-align: center;">0.733</td>
-<td style="text-align: center;">0.856</td>
-<td style="text-align: center;">0.632</td>
-<td style="text-align: center;">0.840</td>
-</tr>
-</tbody>
-</table>
+<div class="cell-output cell-output-stdout">
+<pre><code>\begin{table}
+
+\caption{\label{tab:unnamed-chunk-24}CV performance metrics}
+\centering
+\begin{tabular}[t]{l|c|c|c|c|c|c}
+\hline
+Model &amp; Accuracy &amp; F1 Score &amp; Precision &amp; Recall &amp; Specificity &amp; AUROC\\
+\hline
+Elastic Net &amp; 0.664 &amp; 0.640 &amp; 0.762 &amp; 0.551 &amp; 0.797 &amp; 0.748\\
+\hline
+Random Forest &amp; 0.822 &amp; 0.837 &amp; 0.833 &amp; 0.840 &amp; 0.801 &amp; 0.902\\
+\hline
+GBM Boosted Tree &amp; 0.810 &amp; 0.825 &amp; 0.823 &amp; 0.827 &amp; 0.789 &amp; 0.887\\
+\hline
+KNN &amp; 0.753 &amp; 0.790 &amp; 0.733 &amp; 0.856 &amp; 0.632 &amp; 0.840\\
+\hline
+\end{tabular}
+\end{table}</code></pre>
 </div>
 <div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-22-1.png" class="img-fluid" width="672"></p>
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 </section>
@@ -415,7 +345,8 @@ Yes  769 3565   0.1774342</code></pre>
 </section>
 <section id="question-3" class="level2">
 <h2 class="anchored" data-anchor-id="question-3">Question 3:</h2>
-<p>###a)</p>
+<section id="a-1" class="level3">
+<h3 class="anchored" data-anchor-id="a-1">a)</h3>
 <div class="cell">
 <div class="cell-output cell-output-stdout">
 <pre><code>    tau Accuracy  F1.Score Precision    Recall Specificity
@@ -424,15 +355,18 @@ Yes  769 3565   0.1774342</code></pre>
 </div>
 <div class="cell">
 <div class="cell-output-display">
-<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-26-1.png" class="img-fluid" width="672"></p>
-</div>
-</div>
-<p>###b)</p>
-<div class="cell">
-<div class="cell-output-display">
 <p><img src="A1_Quarto_files/figure-html/unnamed-chunk-28-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
+</section>
+<section id="b-1" class="level3">
+<h3 class="anchored" data-anchor-id="b-1">b)</h3>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-30-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
 <section id="c" class="level3">
 <h3 class="anchored" data-anchor-id="c">c)</h3>
 <div class="cell">
@@ -449,17 +383,149 @@ Yes  769 3565   0.1774342</code></pre>
 </div>
 <div class="cell">
 <div class="cell-output cell-output-stdout">
-<pre><code>                  Set Accuracy  F1.Score Precision    Recall Specificity
-1   CV at optimal tau   0.8085 0.8327146 0.7904229 0.8797877   0.7242226
-2 Test at optimal tau   0.8075 0.8306203 0.7879800 0.8781395   0.7254054
-      AUROC
-1 0.8967169
-2 0.8983366</code></pre>
+<pre><code>\begin{table}
+
+\caption{\label{tab:unnamed-chunk-35}Comparison of CV and test performance at the optimal threshold}
+\centering
+\begin{tabular}[t]{l|c|c|c|c|c|c}
+\hline
+Set &amp; Accuracy &amp; F1 Score &amp; Precision &amp; Recall &amp; Specificity &amp; AUROC\\
+\hline
+CV at Optimal Tau &amp; 0.808 &amp; 0.833 &amp; 0.790 &amp; 0.880 &amp; 0.724 &amp; 0.897\\
+\hline
+Test at Optimal Tau &amp; 0.807 &amp; 0.831 &amp; 0.788 &amp; 0.878 &amp; 0.725 &amp; 0.898\\
+\hline
+\end{tabular}
+\end{table}</code></pre>
 </div>
 </div>
 <div class="cell">
 <div class="cell-output cell-output-stdout">
 <pre><code>Best Tau: 0.45</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="question-4" class="level2">
+<h2 class="anchored" data-anchor-id="question-4">Question 4</h2>
+<section id="a-2" class="level3">
+<h3 class="anchored" data-anchor-id="a-2">a)</h3>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="A1_Quarto_files/figure-html/unnamed-chunk-38-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="b-2" class="level3">
+<h3 class="anchored" data-anchor-id="b-2">b)</h3>
+<div class="cell">
+<div class="cell-output-display">
+<p><img src="pdp_plots.png" class="img-fluid"></p>
+</div>
+</div>
+</section>
+<section id="c-1" class="level3">
+<h3 class="anchored" data-anchor-id="c-1">c)</h3>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>     host_response_time host_response_rate host_acceptance_rate
+119  within a few hours                100                   92
+1381     within an hour                 90                  100
+684      within an hour                100                  100
+515  a few days or more                  0                   88
+81   within a few hours                100                   82
+     host_is_superhost HighHost  latitude longitude       room_type
+119                  t       No -34.09630  18.36653 Entire home/apt
+1381                 f       No -33.79944  18.50338 Entire home/apt
+684                  f       No -33.89068  18.51565 Entire home/apt
+515                  f       No -33.82214  18.48390 Entire home/apt
+81                   t       No -33.91408  18.42526 Entire home/apt
+     accommodates bathrooms bedrooms beds price minimum_nights maximum_nights
+119             8         3        3    3  2628              2            200
+1381            2         1        1    1  1200              1            365
+684             2         1        1    1  1242              2            365
+515             3         2        2    2  1170              1            365
+81              2         1        1    1  1232              5             90
+     minimum_nights_avg_ntm maximum_nights_avg_ntm availability_30
+119                     2.0                    200               0
+1381                    1.9                     63              27
+684                     2.3                   1125              26
+515                     1.0                    365               9
+81                      5.0                     90              11
+     availability_60 availability_90 availability_365 number_of_reviews
+119                0               0              143                47
+1381              55              81              295                 1
+684               56              86              336                53
+515               31              31              220                 4
+81                27              29              178                65
+     reviews_per_month review_scores_rating instant_bookable host_since_days
+119               0.33                 4.87                f            1406
+1381              0.27                 5.00                t            5663
+684               0.92                 4.58                t            4020
+515               0.44                 4.00                f            5117
+81                1.36                 4.91                f            1540
+     has_email_verification has_phone_verification has_work_email_verification
+119                       1                      1                           1
+1381                      1                      1                           0
+684                       1                      1                           0
+515                       0                      1                           0
+81                        1                      1                           0
+     actual predicted pred_prob_yes
+119      No       Yes         0.625
+1381     No       Yes         0.615
+684      No       Yes         0.510
+515      No       Yes         0.575
+81       No       Yes         0.520</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>     host_response_time host_response_rate host_acceptance_rate
+1644 within a few hours                100                   65
+1891     within an hour                100                   64
+785      within an hour                 80                   60
+744  within a few hours                100                  100
+95       within an hour                100                   90
+     host_is_superhost HighHost  latitude longitude       room_type
+1644                 t      Yes -33.90713  18.40935 Entire home/apt
+1891                 f      Yes -33.90843  18.40849 Entire home/apt
+785                  t      Yes -33.80726  18.48250 Entire home/apt
+744                  t      Yes -34.10960  18.46645 Entire home/apt
+95                   t      Yes -34.11968  18.45613 Entire home/apt
+     accommodates bathrooms bedrooms beds price minimum_nights maximum_nights
+1644            2         1        1    2  1129              7            365
+1891            3         1        1    2   995              3             45
+785             5         2        2    7   780              9            189
+744             2         1        1    1  1306              2             90
+95              8         3        4    5  4275              2           1125
+     minimum_nights_avg_ntm maximum_nights_avg_ntm availability_30
+1644                    7.0                    365              19
+1891                    3.0                     45               4
+785                     9.0                    189               0
+744                     2.3                   1125              27
+95                      2.0                   1125              20
+     availability_60 availability_90 availability_365 number_of_reviews
+1644              49              67              337                 1
+1891               4               4                4                 2
+785                0               6              118                28
+744               33              52              186                 1
+95                32              42              219               113
+     reviews_per_month review_scores_rating instant_bookable host_since_days
+1644              1.00                 5.00                f            1863
+1891              0.23                 5.00                f            1840
+785               0.34                 4.89                f            2515
+744               0.91                 5.00                f            1666
+95                1.94                 4.94                f            2496
+     has_email_verification has_phone_verification has_work_email_verification
+1644                      0                      1                           0
+1891                      1                      1                           0
+785                       1                      1                           0
+744                       1                      1                           0
+95                        1                      1                           1
+     actual predicted pred_prob_yes
+1644    Yes        No         0.495
+1891    Yes        No         0.425
+785     Yes        No         0.425
+744     Yes        No         0.355
+95      Yes        No         0.480</code></pre>
 </div>
 </div>
 </section>
