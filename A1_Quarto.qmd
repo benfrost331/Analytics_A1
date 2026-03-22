@@ -484,7 +484,7 @@ ggplot(rfResults, aes(x = ntree, y = mean_auc,
   facet_wrap(~ mtry, scales = "fixed", labeller = label_both) +
   labs(
     x = "Number of Trees",
-    y = "AUROC",
+    y = "Mean CV AUROC",
     colour = "Node Size",
   ) +
   theme_minimal()
